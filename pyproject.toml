@@ -1,0 +1,41 @@
+[project]
+name = "datafordeler-mcp"
+version = "0.1.0"
+description = "MCP server for Danish buildings (BBR) and addresses (DAR) from Datafordeler and Adressevælger"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28",
+    "mcp>=2.3.0,<3",
+]
+keywords = ["mcp", "bbr", "dar", "datafordeler", "denmark", "addresses", "buildings"]
+
+[project.scripts]
+datafordeler-mcp = "datafordeler_mcp.server:main"
+
+[project.urls]
+Repository = "https://github.com/JulianUmbhau/datafordeler-mcp"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "respx>=0.22",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not live'"
+markers = ["live: calls the real Datafordeler and Adressevælger services (needs DATAFORDELER_API_KEY)"]
