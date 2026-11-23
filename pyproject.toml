@@ -1,5 +1,5 @@
 [project]
-name = "datafordeler-mcp"
+name = "bbr-mcp"
 version = "0.1.0"
 description = "MCP server for Danish buildings (BBR) and addresses (DAR) from Datafordeler and Adressevælger"
 readme = "README.md"
@@ -13,10 +13,10 @@ dependencies = [
 keywords = ["mcp", "bbr", "dar", "datafordeler", "denmark", "addresses", "buildings"]
 
 [project.scripts]
-datafordeler-mcp = "datafordeler_mcp.server:main"
+bbr-mcp = "bbr_mcp.server:main"
 
 [project.urls]
-Repository = "https://github.com/JulianUmbhau/datafordeler-mcp"
+Repository = "https://github.com/JulianUmbhau/bbr-mcp"
 
 [dependency-groups]
 dev = [

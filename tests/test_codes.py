@@ -1,4 +1,4 @@
-from datafordeler_mcp.codes import FIELD_LISTS, code_lists, translate
+from bbr_mcp.codes import FIELD_LISTS, code_lists, translate
 
 
 def test_every_mapped_list_is_in_codes_json():

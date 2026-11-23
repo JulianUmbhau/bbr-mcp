@@ -3,7 +3,7 @@ import math
 import pytest
 from pyproj import Transformer
 
-from datafordeler_mcp import geo
+from bbr_mcp import geo
 
 TO_UTM32 = Transformer.from_crs("EPSG:4326", "EPSG:25832", always_xy=True)
 

@@ -7,7 +7,7 @@ import pytest
 import respx
 from mcp import Client
 
-from datafordeler_mcp.server import mcp
+from bbr_mcp.server import mcp
 
 pytestmark = pytest.mark.anyio
 
@@ -64,7 +64,7 @@ async def test_area_sends_the_polygon_filters_and_status_and_summarises(api_key)
     route = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", rows))
     out = (
         await call(
-            "bbr_buildings_in_area",
+            "buildings_in_area",
             center=[723410, 6178373],
             radius_m=200,
             uses=["120", "Udhus"],
@@ -98,7 +98,7 @@ async def test_area_heating_filters_apply_to_what_comes_back(api_key):
     route = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", rows))
     out = (
         await call(
-            "bbr_buildings_in_area",
+            "buildings_in_area",
             bbox=[723000, 6178000, 724000, 6179000],
             heating=["Varmepumpe", "2"],
             heating_medium=["1"],
@@ -115,7 +115,7 @@ async def test_area_heating_filters_apply_to_what_comes_back(api_key):
 async def test_area_with_not_existing_splits_them(api_key):
     route = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", [building("b1"), building("gone", status="10")]))
     out = (
-        await call("bbr_buildings_in_area", bbox=[723000, 6178000, 724000, 6179000], include_not_existing=True)
+        await call("buildings_in_area", bbox=[723000, 6178000, 724000, 6179000], include_not_existing=True)
     ).structured_content
     assert {"status": {"eq": "6"}} not in sent(route)["where"]["and"]
     assert out["count"] == 1 and out["not_existing_by_state"] == {"demolished or otherwise ceased": 1}
@@ -136,14 +136,14 @@ async def test_area_around_an_address(api_key):
         )
     )
     route = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", []))
-    out = (await call("bbr_buildings_in_area", around_address_id=A1, radius_m=100)).structured_content
+    out = (await call("buildings_in_area", around_address_id=A1, radius_m=100)).structured_content
     assert "723510.38 6178373.70" in sent(route)["where"]["and"][0]["byg404Koordinat"]["intersects"]["wkt"]
     assert out["count"] == 0
 
 
 @respx.mock
 async def test_area_too_many_buildings(api_key, monkeypatch):
-    monkeypatch.setattr("datafordeler_mcp.server.MAX_AREA_BUILDINGS", 1)
+    monkeypatch.setattr("bbr_mcp.server.MAX_AREA_BUILDINGS", 1)
     respx.post(BBR_URL).mock(
         return_value=httpx.Response(
             200,
@@ -154,7 +154,7 @@ async def test_area_too_many_buildings(api_key, monkeypatch):
             },
         )
     )
-    assert "smaller area" in error_text(await call("bbr_buildings_in_area", bbox=[723000, 6178000, 724000, 6179000]))
+    assert "smaller area" in error_text(await call("buildings_in_area", bbox=[723000, 6178000, 724000, 6179000]))
 
 
 @pytest.mark.parametrize(
@@ -169,7 +169,7 @@ async def test_area_too_many_buildings(api_key, monkeypatch):
     ],
 )
 async def test_area_input_errors(args, message):
-    assert message in error_text(await call("bbr_buildings_in_area", **args))
+    assert message in error_text(await call("buildings_in_area", **args))
 
 
 # ------------------------------------------------------------------ list of addresses
@@ -210,7 +210,7 @@ async def test_addresses_are_matched_and_looked_up_together(api_key):
     )
     out = (
         await call(
-            "bbr_buildings_for_addresses",
+            "buildings_for_addresses",
             addresses=["Jagtvej 120, 1. 101, 2200 København N", "Nørrebrogade 1 2200", "Vej", "Fake Street 9"],
         )
     ).structured_content
@@ -233,7 +233,7 @@ async def test_addresses_are_matched_and_looked_up_together(api_key):
 async def test_husnummer_ids_skip_the_search_and_batch_by_100(api_key):
     ids = [f"00000000-0000-0000-0000-{i:012d}" for i in range(150)]
     bbr = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", []))
-    out = (await call("bbr_buildings_for_addresses", husnummer_ids=ids)).structured_content
+    out = (await call("buildings_for_addresses", husnummer_ids=ids)).structured_content
     assert sorted(len(sent(bbr, i)["where"]["husnummer"]["in"]) for i in range(2)) == [50, 100]
     assert out["summary"]["matched"] == 150 and out["summary"]["buildings"] == 0
 
@@ -264,7 +264,7 @@ async def test_units_for_addresses_with_floor_and_door(api_key):
 
     respx.post(BBR_URL).mock(side_effect=bbr)
     out = (
-        await call("bbr_buildings_for_addresses", addresses=["Jagtvej 120, 1. 101, 2200"], include_units=True)
+        await call("buildings_for_addresses", addresses=["Jagtvej 120, 1. 101, 2200"], include_units=True)
     ).structured_content
     unit = out["results"][0]["units"][0]
     assert unit["enh051Varmeinstallation"] == {"code": "1", "text": "Fjernvarme/blokvarme"}
@@ -280,4 +280,4 @@ async def test_units_for_addresses_with_floor_and_door(api_key):
     ],
 )
 async def test_address_list_input_errors(args, message):
-    assert message in error_text(await call("bbr_buildings_for_addresses", **args))
+    assert message in error_text(await call("buildings_for_addresses", **args))

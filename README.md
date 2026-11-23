@@ -1,4 +1,4 @@
-# datafordeler-mcp
+# bbr-mcp
 
 An [MCP](https://modelcontextprotocol.io) server for Danish buildings and addresses. It lets a model:
 
@@ -22,10 +22,10 @@ It uses no DAWA (closed in 2026) and no legacy Datafordeler REST or username/pas
 |---|---|---|
 | `address_search` | `text`, `level` (`adresse` or `husnummer`), `limit` | DAR ids and labels of the matching addresses |
 | `address_get` | `id` of a unit address or a husnummer | full address, postcode, municipality and road code, husnummer id, coordinates |
-| `bbr_buildings` | one of `husnummer_id`, `address_id`, `building_id`, `jordstykke_id`; `limit` | BBR buildings (`byg0xx` fields) |
-| `bbr_units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
-| `bbr_buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
-| `bbr_buildings_for_addresses` | `addresses` (free text) or `husnummer_ids`, at most 200; `include_units` | each address's match (with `exact` and alternatives) and buildings, plus a summary over all of them |
+| `buildings` | one of `husnummer_id`, `address_id`, `building_id`, `jordstykke_id`; `limit` | BBR buildings (`byg0xx` fields) |
+| `units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
+| `buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
+| `buildings_for_addresses` | `addresses` (free text) or `husnummer_ids`, at most 200; `include_units` | each address's match (with `exact` and alternatives) and buildings, plus a summary over all of them |
 
 Area and list notes:
 
@@ -69,8 +69,8 @@ are this server's reading:
 3. Add the server to your MCP client, for example Claude Code:
 
 ```sh
-claude mcp add datafordeler -e DATAFORDELER_API_KEY=<key> -- \
-  uvx --from git+https://github.com/JulianUmbhau/datafordeler-mcp datafordeler-mcp
+claude mcp add bbr -e DATAFORDELER_API_KEY=<key> -- \
+  uvx --from git+https://github.com/JulianUmbhau/bbr-mcp bbr-mcp
 ```
 
 Or in a JSON client config:
@@ -78,9 +78,9 @@ Or in a JSON client config:
 ```json
 {
   "mcpServers": {
-    "datafordeler": {
+    "bbr": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/JulianUmbhau/datafordeler-mcp", "datafordeler-mcp"],
+      "args": ["--from", "git+https://github.com/JulianUmbhau/bbr-mcp", "bbr-mcp"],
       "env": { "DATAFORDELER_API_KEY": "<key>" }
     }
   }
@@ -92,7 +92,7 @@ Or in a JSON client config:
 | `DATAFORDELER_API_KEY` | required for the BBR tools |
 | `ADRESSEVAELGER_TOKEN` | optional. Adressevælger has no user accounts yet and asks everyone to send `adressevaelger123`, the default. Set your own token once accounts arrive. |
 
-`datafordeler-mcp --self-test` checks the installation offline: the tools are registered and the code lists translate.
+`bbr-mcp --self-test` checks the installation offline: the tools are registered and the code lists translate.
 
 ## Development
 
@@ -103,7 +103,7 @@ uv run ruff format --check
 uv run pytest                      # offline, HTTP mocked
 cp .example.env .env               # then fill in DATAFORDELER_API_KEY
 set -a; . ./.env; set +a; uv run pytest -m live
-uv run scripts/update_codes.py     # refresh src/datafordeler_mcp/codes.json from teknik.bbr.dk
+uv run scripts/update_codes.py     # refresh src/bbr_mcp/codes.json from teknik.bbr.dk
 ```
 
 ## Data and licences

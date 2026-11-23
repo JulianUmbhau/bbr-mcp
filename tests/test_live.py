@@ -5,7 +5,7 @@ import os
 import pytest
 from mcp import Client
 
-from datafordeler_mcp.server import mcp
+from bbr_mcp.server import mcp
 
 pytestmark = [
     pytest.mark.live,
@@ -37,8 +37,8 @@ async def test_search_then_get():
 
 
 async def test_buildings_by_address_and_by_husnummer_agree():
-    by_house = await call("bbr_buildings", husnummer_id=HOUSE_ID)
-    by_address = await call("bbr_buildings", address_id=ADDRESS_ID)
+    by_house = await call("buildings", husnummer_id=HOUSE_ID)
+    by_address = await call("buildings", address_id=ADDRESS_ID)
     assert by_house["count"] >= 1
     assert ids(by_house) == ids(by_address)
     assert all(b["status"]["code"] == "6" for b in by_house["results"])
@@ -47,30 +47,30 @@ async def test_buildings_by_address_and_by_husnummer_agree():
 
 
 async def test_units_by_address_and_by_building():
-    units = await call("bbr_units", address_id=ADDRESS_ID)
+    units = await call("units", address_id=ADDRESS_ID)
     assert units["count"] >= 1
     building_id = units["results"][0]["bygning"]
-    in_building = await call("bbr_units", building_id=building_id, limit=1000)
+    in_building = await call("units", building_id=building_id, limit=1000)
     assert "truncated" not in in_building
     assert ADDRESS_ID in ids(in_building, "adresseIdentificerer")
 
 
 async def test_area_around_an_address_with_filters():
-    everything = await call("bbr_buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, limit=0)
+    everything = await call("buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, limit=0)
     assert everything["count"] > 10 and everything["results"] == []
-    houses = await call("bbr_buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, uses=["140"])
+    houses = await call("buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, uses=["140"])
     assert 0 < houses["count"] < everything["count"]
     assert {u["code"] for u in houses["summary"]["by_use"]} == {"140"}
 
 
 async def test_area_in_wgs84_finds_the_same_as_in_utm32():
-    in_wgs84 = await call("bbr_buildings_in_area", bbox=[12.551, 55.698, 12.555, 55.700], crs="4326", limit=0)
+    in_wgs84 = await call("buildings_in_area", bbox=[12.551, 55.698, 12.555, 55.700], crs="4326", limit=0)
     assert in_wgs84["count"] > 0
 
 
 async def test_list_of_addresses():
     out = await call(
-        "bbr_buildings_for_addresses",
+        "buildings_for_addresses",
         addresses=[
             "Jagtvej 120, 1. 101, 2200 København N",
             "Rådhuspladsen 1, 1550 København V",
@@ -86,9 +86,9 @@ async def test_list_of_addresses():
 
 
 async def test_building_by_id_and_parcel():
-    building = (await call("bbr_buildings", husnummer_id=HOUSE_ID))["results"][0]
-    same = await call("bbr_buildings", building_id=building["id_lokalId"])
+    building = (await call("buildings", husnummer_id=HOUSE_ID))["results"][0]
+    same = await call("buildings", building_id=building["id_lokalId"])
     assert same["results"][0]["id_lokalId"] == building["id_lokalId"]
     if building.get("jordstykke"):
-        on_parcel = await call("bbr_buildings", jordstykke_id=building["jordstykke"])
+        on_parcel = await call("buildings", jordstykke_id=building["jordstykke"])
         assert building["id_lokalId"] in ids(on_parcel)

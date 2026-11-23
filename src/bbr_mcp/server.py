@@ -3,7 +3,7 @@
 Addresses come from Adressevælger (no key), buildings and units from the BBR register on Datafordeler's GraphQL service
 (DATAFORDELER_API_KEY). Every BBR query asks for the data as registered and valid now.
 
-`datafordeler-mcp --self-test` checks the server offline: the tools are registered and the code lists translate.
+`bbr-mcp --self-test` checks the server offline: the tools are registered and the code lists translate.
 """
 
 import asyncio
@@ -20,12 +20,12 @@ from mcp.server.mcpserver.exceptions import ToolError
 from . import adressevaelger, geo, graphql
 from .codes import FIELD_LISTS, code_lists, translate
 
-mcp = MCPServer("datafordeler")
+mcp = MCPServer("bbr")
 
 BBR = "BBR/v3"
 BBR_SOURCE = (
     "Bygnings- og Boligregistret (BBR), via Datafordeler, CC BY 4.0. "
-    "Grouping by status and the state labels are added by datafordeler-mcp."
+    "Grouping by status and the state labels are added by bbr-mcp."
 )
 DAR_SOURCE = "Danmarks Adresseregister (DAR), Klimadatastyrelsen, via Adressevælger, CC BY 4.0"
 DAR_STATUS = {"2": "foreløbig", "3": "gældende", "4": "nedlagt", "5": "henlagt"}
@@ -199,7 +199,7 @@ def _summary(buildings: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "total_building_area_m2": total,
         "total_dwelling_area_m2": dwelling,
-        "note": "Heating code 99 means the heating is registered on the units (bbr_units), common in apartment blocks.",
+        "note": "Heating code 99 means the heating is registered on the units (units), common in apartment blocks.",
     }
 
 
@@ -336,9 +336,9 @@ async def address_search(
     """Find Danish addresses from free text, e.g. "Jagtvej 120, 2200" (spelling-tolerant; include the postcode).
 
     level "adresse" finds unit addresses (with floor and door), "husnummer" finds access addresses (one per entrance,
-    what buildings are registered on). Each hit has the DAR id to pass to address_get, bbr_buildings or bbr_units.
+    what buildings are registered on). Each hit has the DAR id to pass to address_get, buildings or units.
     When the text is too vague the hits are roads (type "vejnavn" or "navngivenvejpostnummer"): add a house number.
-    For many addresses at once use bbr_buildings_for_addresses.
+    For many addresses at once use buildings_for_addresses.
     """
     if not text.strip():
         raise ToolError("text is empty")
@@ -377,7 +377,7 @@ async def address_get(id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def bbr_buildings(
+async def buildings(
     husnummer_id: str | None = None,
     address_id: str | None = None,
     building_id: str | None = None,
@@ -393,7 +393,7 @@ async def bbr_buildings(
 
     results and count are the buildings standing now. Planned, under-construction, partly completed, demolished and
     shelved buildings are listed apart in not_existing, each with its state; never count those as existing buildings.
-    For many addresses use bbr_buildings_for_addresses, for an area bbr_buildings_in_area.
+    For many addresses use buildings_for_addresses, for an area buildings_in_area.
     """
     name, value = _one_of(
         husnummer_id=husnummer_id, address_id=address_id, building_id=building_id, jordstykke_id=jordstykke_id
@@ -405,7 +405,7 @@ async def bbr_buildings(
 
 
 @mcp.tool()
-async def bbr_units(
+async def units(
     address_id: str | None = None,
     building_id: str | None = None,
     unit_id: str | None = None,
@@ -426,7 +426,7 @@ async def bbr_units(
 
 
 @mcp.tool()
-async def bbr_buildings_in_area(
+async def buildings_in_area(
     bbox: list[float] | None = None,
     polygon_wkt: str | None = None,
     center: list[float] | None = None,
@@ -461,7 +461,7 @@ async def bbr_buildings_in_area(
 
     At most 10,000 buildings per area before the heating filters (BBR cannot filter on heating itself): in a large
     area, filter on uses too. Buildings whose heating is registered on their units (code 99, apartment blocks) do not
-    match a heating filter; look at their units with bbr_units.
+    match a heating filter; look at their units with units.
 
     By default only standing buildings (status Opført) are counted and listed; include_not_existing adds the planned,
     demolished and shelved ones apart, in not_existing. The summary covers every matching building; results lists at
@@ -552,7 +552,7 @@ async def bbr_buildings_in_area(
 
 
 @mcp.tool()
-async def bbr_buildings_for_addresses(
+async def buildings_for_addresses(
     addresses: list[str] | None = None,
     husnummer_ids: list[str] | None = None,
     include_units: bool = False,
@@ -646,10 +646,10 @@ async def _self_test() -> None:
     expected = {
         "address_search",
         "address_get",
-        "bbr_buildings",
-        "bbr_units",
-        "bbr_buildings_in_area",
-        "bbr_buildings_for_addresses",
+        "buildings",
+        "units",
+        "buildings_in_area",
+        "buildings_for_addresses",
     }
     if names != expected:
         sys.exit(f"self-test failed: tools {sorted(names)}, expected {sorted(expected)}")

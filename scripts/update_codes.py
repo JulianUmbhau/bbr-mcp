@@ -1,4 +1,4 @@
-"""Regenerate src/datafordeler_mcp/codes.json from the official BBR code lists at teknik.bbr.dk.
+"""Regenerate src/bbr_mcp/codes.json from the official BBR code lists at teknik.bbr.dk.
 
     uv run scripts/update_codes.py
 
@@ -14,7 +14,7 @@ from datetime import date
 
 import httpx
 
-from datafordeler_mcp.codes import CODES_FILE, FIELD_LISTS
+from bbr_mcp.codes import CODES_FILE, FIELD_LISTS
 
 SOURCE = "https://teknik.bbr.dk/kodelister"
 ITEM = re.compile(r"<li[^>]*>(.*?)</li>", re.S)

@@ -19,5 +19,5 @@ def no_sleep(monkeypatch):
     async def sleep(seconds):
         delays.append(seconds)
 
-    monkeypatch.setattr("datafordeler_mcp.graphql.asyncio.sleep", sleep)
+    monkeypatch.setattr("bbr_mcp.graphql.asyncio.sleep", sleep)
     return delays

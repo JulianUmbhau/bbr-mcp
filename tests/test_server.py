@@ -5,7 +5,7 @@ import pytest
 import respx
 from mcp import Client
 
-from datafordeler_mcp.server import mcp
+from bbr_mcp.server import mcp
 
 pytestmark = pytest.mark.anyio
 
@@ -65,10 +65,10 @@ async def test_tools_are_registered():
     assert names == {
         "address_search",
         "address_get",
-        "bbr_buildings",
-        "bbr_units",
-        "bbr_buildings_in_area",
-        "bbr_buildings_for_addresses",
+        "buildings",
+        "units",
+        "buildings_in_area",
+        "buildings_for_addresses",
     }
 
 
@@ -124,7 +124,7 @@ async def test_bbr_buildings_by_address_resolves_husnummer_and_translates(api_ke
         return_value=httpx.Response(200, json={"status": "ok", "adresse": ADDRESS})
     )
     bbr = respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Bygning", [BUILDING]))
-    out = (await call("bbr_buildings", address_id=ADDRESS_ID)).structured_content
+    out = (await call("buildings", address_id=ADDRESS_ID)).structured_content
     assert json.loads(bbr.calls[0].request.content)["variables"]["where"] == {"husnummer": {"eq": HOUSE_ID}}
     building = out["results"][0]
     assert building["byg056Varmeinstallation"] == {"code": "1", "text": "Fjernvarme/blokvarme"}
@@ -139,7 +139,7 @@ async def test_bbr_units_by_building(api_key):
     bbr = respx.post(BBR_URL).mock(
         return_value=bbr_page("BBR_Enhed", [{"id_lokalId": "u1", "status": "6", "enh020EnhedensAnvendelse": "140"}])
     )
-    out = (await call("bbr_units", building_id=BUILDING["id_lokalId"])).structured_content
+    out = (await call("units", building_id=BUILDING["id_lokalId"])).structured_content
     sent = json.loads(bbr.calls[0].request.content)
     assert "BBR_Enhed(" in sent["query"]
     assert sent["variables"]["where"] == {"bygning": {"eq": BUILDING["id_lokalId"]}}
@@ -157,7 +157,7 @@ async def test_buildings_not_standing_are_listed_apart(api_key):
         {"id_lokalId": "odd", "status": "99"},
     ]
     respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Bygning", rows))
-    out = (await call("bbr_buildings", husnummer_id=HOUSE_ID)).structured_content
+    out = (await call("buildings", husnummer_id=HOUSE_ID)).structured_content
     assert out["count"] == 1 and [b["id_lokalId"] for b in out["results"]] == [BUILDING["id_lokalId"]]
     assert out["not_existing_count"] == 4
     states = {b["id_lokalId"]: b["state"] for b in out["not_existing"]}
@@ -175,21 +175,21 @@ async def test_buildings_not_standing_are_listed_apart(api_key):
 @respx.mock
 async def test_all_standing_has_no_not_existing_keys(api_key):
     respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Bygning", [BUILDING]))
-    out = (await call("bbr_buildings", husnummer_id=HOUSE_ID)).structured_content
+    out = (await call("buildings", husnummer_id=HOUSE_ID)).structured_content
     assert not {"not_existing", "not_existing_count", "note", "registered_in_error_count"} & out.keys()
 
 
 async def test_needs_exactly_one_id():
-    assert "exactly one" in error_text(await call("bbr_buildings"))
-    assert "exactly one" in error_text(await call("bbr_units", address_id=ADDRESS_ID, unit_id=ADDRESS_ID))
+    assert "exactly one" in error_text(await call("buildings"))
+    assert "exactly one" in error_text(await call("units", address_id=ADDRESS_ID, unit_id=ADDRESS_ID))
 
 
 async def test_rejects_malformed_ids():
-    assert "UUID" in error_text(await call("bbr_units", unit_id="../husnumre/x"))
-    assert "numeric" in error_text(await call("bbr_buildings", jordstykke_id="12a"))
+    assert "UUID" in error_text(await call("units", unit_id="../husnumre/x"))
+    assert "numeric" in error_text(await call("buildings", jordstykke_id="12a"))
 
 
 @respx.mock
 async def test_api_errors_come_back_as_tool_errors(api_key):
     respx.post(BBR_URL).mock(return_value=httpx.Response(401))
-    assert "API key" in error_text(await call("bbr_units", unit_id=ADDRESS_ID))
+    assert "API key" in error_text(await call("units", unit_id=ADDRESS_ID))

@@ -5,7 +5,7 @@ import httpx
 import pytest
 import respx
 
-from datafordeler_mcp import graphql
+from bbr_mcp import graphql
 
 URL = "https://graphql.datafordeler.dk/BBR/v3"
 pytestmark = pytest.mark.anyio
