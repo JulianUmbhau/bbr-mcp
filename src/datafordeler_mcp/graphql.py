@@ -12,7 +12,10 @@ BASE_URL = os.environ.get("DATAFORDELER_GRAPHQL_URL", "https://graphql.dataforde
 TIMEOUT = 30.0
 MAX_ATTEMPTS = 4
 RETRY_STATUSES = {429, 502, 503, 504}
-PAGE_SIZE = 100
+# Datafordeler's largest page: every page is a round trip, and an area can hold thousands of buildings.
+PAGE_SIZE = 1000
+# Values per `in` filter (Datafordeler's limit).
+MAX_IN = 100
 
 # Datafordeler takes the key only as the apiKey URL parameter, and httpx logs every request URL at INFO: keep it quiet.
 logging.getLogger("httpx").setLevel(logging.WARNING)

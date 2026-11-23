@@ -23,9 +23,7 @@ def _token() -> str:
 
 async def _get(client: httpx.AsyncClient, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
     try:
-        response = await client.get(
-            f"{BASE_URL}/{path}", params={**(params or {}), "token": _token()}, timeout=TIMEOUT
-        )
+        response = await client.get(f"{BASE_URL}/{path}", params={**(params or {}), "token": _token()}, timeout=TIMEOUT)
     except httpx.TransportError as e:
         raise AdressevaelgerError(f"Adressevælger unreachable: {e!r}") from None
     if response.status_code == 404:

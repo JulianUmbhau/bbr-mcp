@@ -55,6 +55,36 @@ async def test_units_by_address_and_by_building():
     assert ADDRESS_ID in ids(in_building, "adresseIdentificerer")
 
 
+async def test_area_around_an_address_with_filters():
+    everything = await call("bbr_buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, limit=0)
+    assert everything["count"] > 10 and everything["results"] == []
+    houses = await call("bbr_buildings_in_area", around_address_id=ADDRESS_ID, radius_m=300, uses=["140"])
+    assert 0 < houses["count"] < everything["count"]
+    assert {u["code"] for u in houses["summary"]["by_use"]} == {"140"}
+
+
+async def test_area_in_wgs84_finds_the_same_as_in_utm32():
+    in_wgs84 = await call("bbr_buildings_in_area", bbox=[12.551, 55.698, 12.555, 55.700], crs="4326", limit=0)
+    assert in_wgs84["count"] > 0
+
+
+async def test_list_of_addresses():
+    out = await call(
+        "bbr_buildings_for_addresses",
+        addresses=[
+            "Jagtvej 120, 1. 101, 2200 København N",
+            "Rådhuspladsen 1, 1550 København V",
+            "Ikkeeksisterendevej 999, 9999",
+        ],
+        include_units=True,
+    )
+    s = out["summary"]
+    assert s["matched"] == 2 and s["not_found"] + s["vague"] == 1
+    jagtvej = out["results"][0]
+    assert jagtvej["match"]["husnummer_id"] == HOUSE_ID and jagtvej["building_count"] >= 1
+    assert jagtvej["units"][0]["adresseIdentificerer"] == ADDRESS_ID
+
+
 async def test_building_by_id_and_parcel():
     building = (await call("bbr_buildings", husnummer_id=HOUSE_ID))["results"][0]
     same = await call("bbr_buildings", building_id=building["id_lokalId"])

@@ -24,6 +24,18 @@ It uses no DAWA (closed in 2026) and no legacy Datafordeler REST or username/pas
 | `address_get` | `id` of a unit address or a husnummer | full address, postcode, municipality and road code, husnummer id, coordinates |
 | `bbr_buildings` | one of `husnummer_id`, `address_id`, `building_id`, `jordstykke_id`; `limit` | BBR buildings (`byg0xx` fields) |
 | `bbr_units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
+| `bbr_buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
+| `bbr_buildings_for_addresses` | `addresses` (free text) or `husnummer_ids`, at most 200; `include_units` | each address's match (with `exact` and alternatives) and buildings, plus a summary over all of them |
+
+Area and list notes:
+
+- **Size limits.** An area may be up to 25 km² and up to 10,000 buildings. A radius may be up to 2.5 km.
+- **Coordinates.** WGS84 longitude/latitude is converted to EPSG:25832 locally, because BBR's spatial filter takes
+  only its own coordinate system.
+- **Filters.** BBR can filter on use and status itself. It has no heating filter, so `heating` and `heating_medium`
+  apply to the fetched buildings. A building whose heating is registered on its units (code 99) doesn't match them.
+- **Address matching.** Free-text addresses go through Adressevælger, and `exact` says whether the match is the
+  same address written differently. Check non-exact matches before relying on them.
 
 - Coded fields come as `{"code": "1", "text": "Fjernvarme/blokvarme"}`, and empty fields are left out.
 - Coordinates are EPSG:25832 (ETRS89 / UTM 32N, metres).
@@ -87,6 +99,7 @@ Or in a JSON client config:
 ```sh
 uv sync
 uv run ruff check
+uv run ruff format --check
 uv run pytest                      # offline, HTTP mocked
 cp .example.env .env               # then fill in DATAFORDELER_API_KEY
 set -a; . ./.env; set +a; uv run pytest -m live

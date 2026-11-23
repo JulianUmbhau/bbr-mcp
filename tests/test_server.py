@@ -62,20 +62,43 @@ def error_text(result):
 async def test_tools_are_registered():
     async with Client(mcp) as client:
         names = {t.name for t in (await client.list_tools()).tools}
-    assert names == {"address_search", "address_get", "bbr_buildings", "bbr_units"}
+    assert names == {
+        "address_search",
+        "address_get",
+        "bbr_buildings",
+        "bbr_units",
+        "bbr_buildings_in_area",
+        "bbr_buildings_for_addresses",
+    }
 
 
 @respx.mock
 async def test_address_search():
     route = respx.get("https://adressevaelger.dk/adresser/soeg").mock(
-        return_value=httpx.Response(200, json={"status": "ok", "fund": [
-            {"type": "adresse", "id": ADDRESS_ID, "titel": "Jagtvej 120, 1. 101, 2200 København N",
-             "husnummerId": HOUSE_ID}]})
+        return_value=httpx.Response(
+            200,
+            json={
+                "status": "ok",
+                "fund": [
+                    {
+                        "type": "adresse",
+                        "id": ADDRESS_ID,
+                        "titel": "Jagtvej 120, 1. 101, 2200 København N",
+                        "husnummerId": HOUSE_ID,
+                    }
+                ],
+            },
+        )
     )
     result = await call("address_search", text="Jagtvej 120 1 101 2200")
     assert result.structured_content["results"] == [
-        {"type": "adresse", "id": ADDRESS_ID, "titel": "Jagtvej 120, 1. 101, 2200 København N",
-         "husnummer_id": HOUSE_ID}]
+        {
+            "type": "adresse",
+            "id": ADDRESS_ID,
+            "titel": "Jagtvej 120, 1. 101, 2200 København N",
+            "husnummer_id": HOUSE_ID,
+        }
+    ]
     params = route.calls[0].request.url.params
     assert params["tekst"] == "Jagtvej 120 1 101 2200" and params["token"] == "adressevaelger123"
 
@@ -113,8 +136,9 @@ async def test_bbr_buildings_by_address_resolves_husnummer_and_translates(api_ke
 
 @respx.mock
 async def test_bbr_units_by_building(api_key):
-    bbr = respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Enhed", [{"id_lokalId": "u1", "status": "6",
-                                                                         "enh020EnhedensAnvendelse": "140"}]))
+    bbr = respx.post(BBR_URL).mock(
+        return_value=bbr_page("BBR_Enhed", [{"id_lokalId": "u1", "status": "6", "enh020EnhedensAnvendelse": "140"}])
+    )
     out = (await call("bbr_units", building_id=BUILDING["id_lokalId"])).structured_content
     sent = json.loads(bbr.calls[0].request.content)
     assert "BBR_Enhed(" in sent["query"]
@@ -137,9 +161,12 @@ async def test_buildings_not_standing_are_listed_apart(api_key):
     assert out["count"] == 1 and [b["id_lokalId"] for b in out["results"]] == [BUILDING["id_lokalId"]]
     assert out["not_existing_count"] == 4
     states = {b["id_lokalId"]: b["state"] for b in out["not_existing"]}
-    assert states == {"demolished": "demolished or otherwise ceased", "shelved": "shelved, never built",
-                      "partly": "partly completed, may be partly in use (Delvis afsluttet)",
-                      "odd": "unknown status"}
+    assert states == {
+        "demolished": "demolished or otherwise ceased",
+        "shelved": "shelved, never built",
+        "partly": "partly completed, may be partly in use (Delvis afsluttet)",
+        "odd": "unknown status",
+    }
     assert out["not_existing"][0]["status"] == {"code": "10", "text": "Historisk"}
     assert out["registered_in_error_count"] == 1
     assert "Do not count" in out["note"]

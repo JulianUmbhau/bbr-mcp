@@ -20,6 +20,7 @@ Repository = "https://github.com/JulianUmbhau/datafordeler-mcp"
 
 [dependency-groups]
 dev = [
+    "pyproj>=3.6",
     "pytest>=8",
     "respx>=0.22",
     "ruff>=0.8",
