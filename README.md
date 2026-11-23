@@ -69,8 +69,7 @@ are this server's reading:
 3. Add the server to your MCP client, for example Claude Code:
 
 ```sh
-claude mcp add bbr -e DATAFORDELER_API_KEY=<key> -- \
-  uvx --from git+https://github.com/JulianUmbhau/bbr-mcp bbr-mcp
+claude mcp add bbr -e DATAFORDELER_API_KEY=<key> -- uvx bbr-mcp
 ```
 
 Or in a JSON client config:
@@ -80,7 +79,7 @@ Or in a JSON client config:
   "mcpServers": {
     "bbr": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/JulianUmbhau/bbr-mcp", "bbr-mcp"],
+      "args": ["bbr-mcp"],
       "env": { "DATAFORDELER_API_KEY": "<key>" }
     }
   }
