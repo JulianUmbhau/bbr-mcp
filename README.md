@@ -25,7 +25,7 @@ It uses no DAWA (closed in 2026) and no legacy Datafordeler REST or username/pas
 | `buildings` | one of `husnummer_id`, `address_id`, `building_id`, `jordstykke_id`; `limit` | BBR buildings (`byg0xx` fields) |
 | `units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
 | `buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
-| `buildings_for_addresses` | `addresses` (free text) or `husnummer_ids`, at most 200; `include_units` | each address's match (with `exact` and alternatives) and buildings, plus a summary over all of them |
+| `buildings_for_addresses` | `addresses` (free text), `husnummer_ids` or `building_ids`, at most 200; `include_units` | each address's match (with `exact` and alternatives) or each building, plus a summary over all of them |
 
 Area and list notes:
 

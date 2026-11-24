@@ -556,12 +556,15 @@ async def buildings_in_area(
 async def buildings_for_addresses(
     addresses: list[str] | None = None,
     husnummer_ids: list[str] | None = None,
+    building_ids: list[str] | None = None,
     include_units: bool = False,
 ) -> dict[str, Any]:
-    """BBR buildings for a list of addresses at once (e.g. a list of customers), with a summary over all of them.
+    """BBR buildings for a list of addresses or buildings at once (e.g. a list of customers or meters), with a summary
+    over all of them.
 
-    Give addresses as free text (e.g. "Jagtvej 120, 1. tv, 2200 København N"; include house number and postcode) or,
-    when you already have them, husnummer_ids (DAR access address ids). At most 200 per call.
+    Give exactly one of: addresses as free text (e.g. "Jagtvej 120, 1. tv, 2200 København N"; include house number
+    and postcode), husnummer_ids (DAR access address ids) or building_ids (BBR bygning ids), e.g. from a table that
+    links meters to buildings. At most 200 per call. A building id not found in BBR has status "not_found".
 
     Each free-text address is matched with Adressevælger: status "matched" with the matched address (`titel`) and
     whether it is the same address written differently (`exact`); otherwise "not_found" or "vague" (only roads
@@ -570,16 +573,23 @@ async def buildings_for_addresses(
     include_units, the units of addresses matched with floor/door are added (their own heating, enh051-053).
 
     The summary counts the standing buildings of all matched addresses (by use, heating installation, heating medium,
-    supplementary heat, year built). Each address lists its standing buildings and, apart, those not existing.
+    supplementary heat, year built). Each entry lists its standing buildings and, apart, those not existing. With
+    building_ids and include_units, each building's units are added.
     """
     addresses = [a.strip() for a in addresses or [] if a and a.strip()]
     husnummer_ids = [h.strip() for h in husnummer_ids or [] if h and h.strip()]
-    if bool(addresses) == bool(husnummer_ids):
-        raise ToolError("Give either addresses or husnummer_ids")
-    if len(addresses) + len(husnummer_ids) > MAX_ADDRESSES:
+    building_ids = [b.strip() for b in building_ids or [] if b and b.strip()]
+    given = [x for x in (addresses, husnummer_ids, building_ids) if x]
+    if len(given) != 1:
+        raise ToolError("Give exactly one of addresses, husnummer_ids or building_ids")
+    if len(given[0]) > MAX_ADDRESSES:
         raise ToolError(f"At most {MAX_ADDRESSES} per call: split the list")
     for h in husnummer_ids:
         _check_id("husnummer_ids", h)
+    for b in building_ids:
+        _check_id("building_ids", b)
+    if building_ids:
+        return await _for_buildings(building_ids, include_units)
 
     async with httpx.AsyncClient() as client:
         if addresses:
@@ -638,6 +648,45 @@ async def buildings_for_addresses(
         "results": entries,
         "note": NOT_EXISTING_NOTE,
         "source": f"{BBR_SOURCE} {DAR_SOURCE}",
+    }
+
+
+async def _for_buildings(building_ids: list[str], include_units: bool) -> dict[str, Any]:
+    """buildings_for_addresses with BBR bygning ids: each id is its own entry."""
+    wanted = sorted(set(building_ids))
+    async with httpx.AsyncClient() as client:
+        buildings = await _bbr_in(client, "BBR_Bygning", "id_lokalId", wanted, COMPACT_BUILDING_FIELDS)
+        units = await _bbr_in(client, "BBR_Enhed", "bygning", wanted, COMPACT_UNIT_FIELDS) if include_units else []
+    by_id = {b["id_lokalId"]: b for b in buildings}
+    by_building: dict[str, list[dict[str, Any]]] = {}
+    for u in units:
+        by_building.setdefault(u.get("bygning"), []).append(u)
+
+    entries = []
+    for b in building_ids:
+        if b not in by_id:
+            entries.append({"input": b, "status": "not_found"})
+            continue
+        entry: dict[str, Any] = {"input": b, "status": "matched", "match": {"building_id": b}}
+        _grouped(entry, [by_id[b]])
+        entry["buildings"], entry["building_count"] = entry.pop("results"), entry.pop("count")
+        entry.pop("note", None)
+        if include_units:
+            entry["units"] = [_row(u) for u in _split(by_building.get(b, []))[0]]
+        entries.append(entry)
+
+    standing = [by_id[b] for b in wanted if b in by_id and str(by_id[b].get("status")) == STANDING]
+    statuses = Counter(e["status"] for e in entries)
+    return {
+        "summary": {
+            "buildings_asked": len(entries),
+            "found": statuses["matched"],
+            "not_found": statuses["not_found"],
+            **_summary(standing),
+        },
+        "results": entries,
+        "note": NOT_EXISTING_NOTE,
+        "source": BBR_SOURCE,
     }
 
 

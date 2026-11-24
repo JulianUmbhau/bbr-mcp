@@ -92,3 +92,12 @@ async def test_building_by_id_and_parcel():
     if building.get("jordstykke"):
         on_parcel = await call("buildings", jordstykke_id=building["jordstykke"])
         assert building["id_lokalId"] in ids(on_parcel)
+
+
+async def test_buildings_for_building_ids_match_the_husnummer():
+    by_house = await call("buildings", husnummer_id=HOUSE_ID)
+    building_ids = sorted(ids(by_house))
+    out = await call("buildings_for_addresses", building_ids=building_ids, include_units=True)
+    assert out["summary"]["found"] == len(building_ids) and out["summary"]["not_found"] == 0
+    assert out["summary"]["buildings"] == by_house["count"]
+    assert any(e.get("units") for e in out["results"])
