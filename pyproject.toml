@@ -1,6 +1,6 @@
 [project]
 name = "bbr-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for Danish buildings (BBR) and addresses (DAR) from Datafordeler and Adressevælger"
 readme = "README.md"
 license = "MIT"

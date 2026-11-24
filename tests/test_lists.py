@@ -281,3 +281,11 @@ async def test_units_for_addresses_with_floor_and_door(api_key):
 )
 async def test_address_list_input_errors(args, message):
     assert message in error_text(await call("buildings_for_addresses", **args))
+
+
+def test_exact_keeps_house_number_and_floor_apart():
+    from bbr_mcp.server import _normal
+
+    assert _normal("Nørregade 1, 11. tv., 5000 Odense C") != _normal("Nørregade 11, 1. tv., 5000 Odense C")
+    assert _normal("Jagtvej 120, 1. 101, 2200 København N") == _normal("Jagtvej 120 1 101 2200 københavn n")
+    assert _normal("Vestergade 12A, 7100") == _normal("Vestergade 12 A, 7100")

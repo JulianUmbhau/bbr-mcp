@@ -295,8 +295,9 @@ def _address(level: str, record: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in out.items() if v is not None}
 
 
-def _normal(text: str) -> str:
-    return re.sub(r"[^0-9a-zæøåäöü]", "", text.lower())
+def _normal(text: str) -> list[str]:
+    """The address as its words and numbers, in order: "1, 11. tv" and "11, 1. tv" differ, "12A" equals "12 A"."""
+    return re.findall(r"\d+|[^\W\d_]+", text.lower())
 
 
 async def _match(client: httpx.AsyncClient, text: str, gate: asyncio.Semaphore) -> dict[str, Any]:
