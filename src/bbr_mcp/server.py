@@ -558,6 +558,7 @@ async def buildings_for_addresses(
     husnummer_ids: list[str] | None = None,
     building_ids: list[str] | None = None,
     include_units: bool = False,
+    per_address_limit: int = 20,
 ) -> dict[str, Any]:
     """BBR buildings for a list of addresses or buildings at once (e.g. a list of customers or meters), with a summary
     over all of them.
@@ -573,8 +574,11 @@ async def buildings_for_addresses(
     include_units, the units of addresses matched with floor/door are added (their own heating, enh051-053).
 
     The summary counts the standing buildings of all matched addresses (by use, heating installation, heating medium,
-    supplementary heat, year built). Each entry lists its standing buildings and, apart, those not existing. With
-    building_ids and include_units, each building's units are added.
+    supplementary heat, year built) and covers every building. Each address lists at most per_address_limit of its
+    standing buildings (compact fields; a large site such as a campus or an amusement park has dozens), and counts
+    the ones not existing (not_existing_count): see them with buildings on its husnummer_id. For a long list,
+    per_address_limit=0 gives only the matches and the summary. With building_ids each
+    entry is one building, with its state when it no longer stands; with include_units its units are added.
     """
     addresses = [a.strip() for a in addresses or [] if a and a.strip()]
     husnummer_ids = [h.strip() for h in husnummer_ids or [] if h and h.strip()]
@@ -584,6 +588,8 @@ async def buildings_for_addresses(
         raise ToolError("Give exactly one of addresses, husnummer_ids or building_ids")
     if len(given[0]) > MAX_ADDRESSES:
         raise ToolError(f"At most {MAX_ADDRESSES} per call: split the list")
+    if per_address_limit < 0:
+        raise ToolError("per_address_limit must be 0 or more")
     for h in husnummer_ids:
         _check_id("husnummer_ids", h)
     for b in building_ids:
@@ -625,9 +631,18 @@ async def buildings_for_addresses(
             continue
         here = by_house.get(entry["match"]["husnummer_id"], [])
         standing_all.extend(b for b in here if str(b.get("status")) == STANDING)
-        _grouped(entry, here)
-        entry["buildings"], entry["building_count"] = entry.pop("results"), entry.pop("count")
-        entry.pop("note", None)
+        standing, not_existing, in_error = _split(here)
+        entry["building_count"] = len(standing)
+        entry["buildings"] = [_row(b) for b in standing[:per_address_limit]]
+        if len(standing) > per_address_limit:
+            entry["buildings_truncated"] = (
+                f"{len(standing)} standing, {per_address_limit} listed; the summary covers all, "
+                "buildings on the husnummer_id lists them"
+            )
+        if not_existing:
+            entry["not_existing_count"] = len(not_existing)
+        if in_error:
+            entry["registered_in_error_count"] = in_error
         if include_units and entry["match"].get("adresse_id"):
             unit_rows = by_address.get(entry["match"]["adresse_id"], [])
             entry["units"] = [_row(u) for u in _split(unit_rows)[0]]

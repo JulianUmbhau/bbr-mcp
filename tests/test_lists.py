@@ -229,7 +229,7 @@ async def test_addresses_are_matched_and_looked_up_together(api_key):
     assert norrebro["match"]["exact"] is False and norrebro["match"]["alternatives"] == [
         "Nørrebrogade 11, 2200 København N"
     ]
-    assert norrebro["building_count"] == 1 and norrebro["not_existing"][0]["state"] == "demolished or otherwise ceased"
+    assert norrebro["building_count"] == 1 and norrebro["not_existing_count"] == 1 and "not_existing" not in norrebro
     assert vague["status"] == "vague" and "house number" in vague["hint"]
     assert fake["status"] == "not_found"
 
@@ -276,6 +276,21 @@ async def test_units_for_addresses_with_floor_and_door(api_key):
 
 
 @respx.mock
+async def test_a_large_site_lists_at_most_per_address_limit(api_key):
+    respx.post(BBR_URL).mock(
+        return_value=page("BBR_Bygning", [building(f"b{i}") for i in range(30)] + [building("gone", status="10")])
+    )
+    out = (await call("buildings_for_addresses", husnummer_ids=[H1], per_address_limit=5)).structured_content
+    site = out["results"][0]
+    assert (
+        site["building_count"] == 30
+        and len(site["buildings"]) == 5
+        and "30 standing, 5 listed" in site["buildings_truncated"]
+    )
+    assert site["not_existing_count"] == 1 and out["summary"]["buildings"] == 30
+
+
+@respx.mock
 async def test_buildings_for_building_ids_with_units(api_key):
     def bbr(request):
         body = json.loads(request.content)
@@ -308,6 +323,7 @@ async def test_buildings_for_building_ids_with_units(api_key):
         ({"husnummer_ids": [H1], "building_ids": [B1]}, "exactly one of"),
         ({"building_ids": [B1] * 201}, "At most 200"),
         ({"building_ids": ["../x"]}, "UUID"),
+        ({"husnummer_ids": [H1], "per_address_limit": -1}, "0 or more"),
         ({"addresses": [f"Vej {i}" for i in range(201)]}, "At most 200"),
         ({"husnummer_ids": ["not-a-uuid"]}, "UUID"),
     ],
