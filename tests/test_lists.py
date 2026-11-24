@@ -110,6 +110,10 @@ async def test_area_heating_filters_apply_to_what_comes_back(api_key):
     )
     assert [b["id_lokalId"] for b in out["results"]] == ["hp"]
     assert out["summary"]["buildings"] == 1
+    on_units = (
+        await call("buildings_in_area", bbox=[723000, 6178000, 724000, 6179000], heating=["99"])
+    ).structured_content
+    assert [b["id_lokalId"] for b in on_units["results"]] == ["flats"]
 
 
 @respx.mock

@@ -33,7 +33,7 @@ Area and list notes:
 - **Coordinates.** WGS84 longitude/latitude is converted to EPSG:25832 locally, because BBR's spatial filter takes
   only its own coordinate system.
 - **Filters.** BBR can filter on use and status itself. It has no heating filter, so `heating` and `heating_medium`
-  apply to the fetched buildings. A building whose heating is registered on its units (code 99) doesn't match them.
+  apply to the fetched buildings. A building whose heating is registered on its units (code 99) matches only a filter on 99.
 - **Address matching.** Free-text addresses go through Adressevælger, and `exact` says whether the match is the
   same address written differently. Check non-exact matches before relying on them.
 

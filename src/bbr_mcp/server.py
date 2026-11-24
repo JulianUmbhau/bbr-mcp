@@ -199,7 +199,7 @@ def _summary(buildings: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "total_building_area_m2": total,
         "total_dwelling_area_m2": dwelling,
-        "note": "Heating code 99 means the heating is registered on the units (units), common in apartment blocks.",
+        "note": "Heating code 99 means the heating is registered on the units (units), common in blocks of flats.",
     }
 
 
@@ -461,8 +461,8 @@ async def buildings_in_area(
       7 Naturgas, 9 Andet
 
     At most 10,000 buildings per area before the heating filters (BBR cannot filter on heating itself): in a large
-    area, filter on uses too. Buildings whose heating is registered on their units (code 99, apartment blocks) do not
-    match a heating filter; look at their units with units.
+    area, filter on uses too. Buildings whose heating is registered on their units (code 99, blocks of flats) match
+    only a filter on 99, never one on codes 1-9; look at their units with units.
 
     By default only standing buildings (status Opført) are counted and listed; include_not_existing adds the planned,
     demolished and shelved ones apart, in not_existing. The summary covers every matching building; results lists at
