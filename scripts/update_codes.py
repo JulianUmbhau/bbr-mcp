@@ -12,7 +12,7 @@ import re
 import sys
 from datetime import date
 
-import httpx
+import httpx2
 
 from bbr_mcp.codes import CODES_FILE, FIELD_LISTS
 
@@ -21,7 +21,7 @@ ITEM = re.compile(r"<li[^>]*>(.*?)</li>", re.S)
 CODE = re.compile(r"^([0-9A-Za-z]{1,6})\s+-\s+(.+)$", re.S)
 
 
-def fetch_list(client: httpx.Client, name: str) -> dict[str, str]:
+def fetch_list(client: httpx2.Client, name: str) -> dict[str, str]:
     response = client.get(f"{SOURCE}/0/1/0/{name}")
     response.raise_for_status()
     start = response.text.find("kodeliste-list")
@@ -41,7 +41,7 @@ def fetch_list(client: httpx.Client, name: str) -> dict[str, str]:
 
 def main() -> None:
     lists = {}
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    with httpx2.Client(timeout=30, follow_redirects=True) as client:
         for name in sorted(set(FIELD_LISTS.values())):
             lists[name] = fetch_list(client, name)
             print(f"{name}: {len(lists[name])} codes")

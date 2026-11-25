@@ -1,8 +1,8 @@
 import json
 
-import httpx
+import httpx2
+import mock_http as respx
 import pytest
-import respx
 from fake_bbr import FakeBBR
 from mcp import Client
 
@@ -45,7 +45,7 @@ BUILDING = {
 
 
 def bbr_page(entity, nodes):
-    return httpx.Response(
+    return httpx2.Response(
         200, json={"data": {entity: {"nodes": nodes, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
     )
 
@@ -77,7 +77,7 @@ async def test_tools_are_registered():
 @respx.mock
 async def test_address_search():
     route = respx.get("https://adressevaelger.dk/adresser/soeg").mock(
-        return_value=httpx.Response(
+        return_value=httpx2.Response(
             200,
             json={
                 "status": "ok",
@@ -107,9 +107,9 @@ async def test_address_search():
 
 @respx.mock
 async def test_address_get_falls_back_to_husnummer():
-    respx.get(f"https://adressevaelger.dk/adresser/{HOUSE_ID}").mock(return_value=httpx.Response(404))
+    respx.get(f"https://adressevaelger.dk/adresser/{HOUSE_ID}").mock(return_value=httpx2.Response(404))
     respx.get(f"https://adressevaelger.dk/husnumre/{HOUSE_ID}").mock(
-        return_value=httpx.Response(200, json={"status": "ok", "husnummer": HOUSE})
+        return_value=httpx2.Response(200, json={"status": "ok", "husnummer": HOUSE})
     )
     out = (await call("address_get", id=HOUSE_ID)).structured_content
     assert out["level"] == "husnummer"
@@ -123,7 +123,7 @@ async def test_address_get_falls_back_to_husnummer():
 @respx.mock
 async def test_bbr_buildings_by_address_resolves_husnummer_and_translates(api_key):
     respx.get(f"https://adressevaelger.dk/adresser/{ADDRESS_ID}").mock(
-        return_value=httpx.Response(200, json={"status": "ok", "adresse": ADDRESS})
+        return_value=httpx2.Response(200, json={"status": "ok", "adresse": ADDRESS})
     )
     unit = {"id_lokalId": "u1", "status": "6", "adresseIdentificerer": ADDRESS_ID, "bygning": BUILDING["id_lokalId"]}
     fake = FakeBBR(BBR_Enhed=[unit], BBR_Bygning=[BUILDING])
@@ -198,5 +198,5 @@ async def test_rejects_malformed_ids():
 
 @respx.mock
 async def test_api_errors_come_back_as_tool_errors(api_key):
-    respx.post(BBR_URL).mock(return_value=httpx.Response(401))
+    respx.post(BBR_URL).mock(return_value=httpx2.Response(401))
     assert "API key" in error_text(await call("units", unit_id=ADDRESS_ID))

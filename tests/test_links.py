@@ -1,8 +1,8 @@
 """How BBR's links are followed: entrances (opgang), units, properties (BFE) and technical installations."""
 
-import httpx
+import httpx2
+import mock_http as respx
 import pytest
-import respx
 from fake_bbr import FakeBBR
 from mcp import Client
 
@@ -40,7 +40,7 @@ async def test_a_husnummer_that_is_another_entrance_finds_its_building(api_key):
 @respx.mock
 async def test_an_address_without_a_unit_falls_back_to_its_entrance(api_key):
     respx.get(f"https://adressevaelger.dk/adresser/{FLAT}").mock(
-        return_value=httpx.Response(200, json={"status": "ok", "adresse": {"husnummer": {"id_lokalid": OTHER}}})
+        return_value=httpx2.Response(200, json={"status": "ok", "adresse": {"husnummer": {"id_lokalid": OTHER}}})
     )
     fake = FakeBBR(BBR_Bygning=[building(B7)], BBR_Opgang=[{"adgangFraHusnummer": OTHER, "bygning": B7}])
     respx.post(BBR_URL).mock(side_effect=fake)

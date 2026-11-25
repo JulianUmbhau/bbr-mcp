@@ -1,13 +1,13 @@
 [project]
 name = "bbr-mcp"
-version = "0.1.5"
+version = "0.1.6"
 description = "MCP server for Danish buildings (BBR) and addresses (DAR) from Datafordeler and Adressevælger"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "httpx>=0.28",
+    "httpx2>=2.10",
     "mcp>=2.3.0,<3",
 ]
 keywords = ["mcp", "bbr", "dar", "datafordeler", "denmark", "addresses", "buildings"]
@@ -22,7 +22,6 @@ Repository = "https://github.com/JulianUmbhau/bbr-mcp"
 dev = [
     "pyproj>=3.6",
     "pytest>=8",
-    "respx>=0.22",
     "ruff>=0.8",
 ]
 

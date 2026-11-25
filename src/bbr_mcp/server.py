@@ -12,12 +12,12 @@ import sys
 from collections import Counter
 from typing import Any, Literal
 
-import httpx
+import httpx2
 from mcp import Client
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from . import adressevaelger, geo, graphql
+from . import adressevaelger, geo, graphql, http
 from .codes import FIELD_LISTS, code_lists, translate
 
 mcp = MCPServer("bbr")
@@ -241,7 +241,7 @@ def _codes(field: str, values: list[str] | None) -> list[str] | None:
 
 
 async def _bbr_rows(
-    client: httpx.AsyncClient, entity: str, where: dict[str, Any], fields: str, limit: int
+    client: httpx2.AsyncClient, entity: str, where: dict[str, Any], fields: str, limit: int
 ) -> tuple[list[dict[str, Any]], bool]:
     try:
         return await graphql.query(client, BBR, entity, where, fields, limit)
@@ -250,7 +250,7 @@ async def _bbr_rows(
 
 
 async def _bbr_in(
-    client: httpx.AsyncClient, entity: str, field: str, ids: list[str], fields: str
+    client: httpx2.AsyncClient, entity: str, field: str, ids: list[str], fields: str
 ) -> list[dict[str, Any]]:
     """Every row whose `field` is one of `ids`, in batches of Datafordeler's `in` limit, at once."""
     batches = [ids[i : i + graphql.MAX_IN] for i in range(0, len(ids), graphql.MAX_IN)]
@@ -261,7 +261,7 @@ async def _bbr_in(
 
 
 async def _bbr(entity: str, where: dict[str, Any], fields: str, limit: int) -> dict[str, Any]:
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         rows, truncated = await _bbr_rows(client, entity, where, fields, limit)
     result = _grouped({}, rows)
     result["source"] = BBR_SOURCE
@@ -270,7 +270,7 @@ async def _bbr(entity: str, where: dict[str, Any], fields: str, limit: int) -> d
     return result
 
 
-async def _by_ids(client: httpx.AsyncClient, ids: set[str], fields: str) -> dict[str, dict[str, Any]]:
+async def _by_ids(client: httpx2.AsyncClient, ids: set[str], fields: str) -> dict[str, dict[str, Any]]:
     rows = await _bbr_in(client, "BBR_Bygning", "id_lokalId", sorted(ids), fields) if ids else []
     return {r["id_lokalId"]: r for r in rows}
 
@@ -280,7 +280,7 @@ def _ordered(by_id: dict[str, dict[str, Any]], ids: set[str]) -> list[dict[str, 
 
 
 async def _buildings_of_houses(
-    client: httpx.AsyncClient, houses: list[str], fields: str
+    client: httpx2.AsyncClient, houses: list[str], fields: str
 ) -> dict[str, tuple[list[dict[str, Any]], str]]:
     """Each husnummer's buildings, and how they were found.
 
@@ -306,7 +306,7 @@ async def _buildings_of_houses(
 
 
 async def _buildings_of_addresses(
-    client: httpx.AsyncClient, addresses: dict[str, str | None], fields: str, unit_fields: str
+    client: httpx2.AsyncClient, addresses: dict[str, str | None], fields: str, unit_fields: str
 ) -> dict[str, tuple[list[dict[str, Any]], str, list[dict[str, Any]]]]:
     """Each unit address's buildings, how they were found, and its units.
 
@@ -344,7 +344,7 @@ async def _buildings_of_addresses(
 
 
 async def _properties(
-    client: httpx.AsyncClient, bfes: list[int], fields: str, unit_fields: str
+    client: httpx2.AsyncClient, bfes: list[int], fields: str, unit_fields: str
 ) -> dict[int, dict[str, Any]]:
     """Each BFE number's kind, buildings, grunde and (for an owner flat) units.
 
@@ -399,7 +399,7 @@ async def _properties(
     return out
 
 
-async def _address_record(client: httpx.AsyncClient, level: str, id: str) -> dict[str, Any] | None:
+async def _address_record(client: httpx2.AsyncClient, level: str, id: str) -> dict[str, Any] | None:
     try:
         return await adressevaelger.get(client, level, id)
     except adressevaelger.AdressevaelgerError as e:
@@ -407,7 +407,7 @@ async def _address_record(client: httpx.AsyncClient, level: str, id: str) -> dic
 
 
 async def _husnummer_of_address(address_id: str) -> str:
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         address = await _address_record(client, "adresse", address_id)
     if address is None:
         raise ToolError(f"No DAR address {address_id}; if it is a husnummer (adgangsadresse) id, pass husnummer_id")
@@ -445,7 +445,7 @@ def _normal(text: str) -> list[str]:
     return re.findall(r"\d+|[^\W\d_]+", text.lower())
 
 
-async def _match(client: httpx.AsyncClient, text: str, gate: asyncio.Semaphore) -> dict[str, Any]:
+async def _match(client: httpx2.AsyncClient, text: str, gate: asyncio.Semaphore) -> dict[str, Any]:
     """The best Adressevælger hit for one free-text address, and whether it is the same address written differently."""
     async with gate:
         try:
@@ -508,7 +508,7 @@ async def _area(
             area_wkt, km2 = geo.circle(center[0], center[1], radius_m or 0, crs)
         else:
             _check_id("around_address_id", around_address_id or "")
-            async with httpx.AsyncClient() as client:
+            async with http.client() as client:
                 found = None
                 for level in ("adresse", "husnummer"):
                     if (record := await _address_record(client, level, (around_address_id or "").strip())) is not None:
@@ -538,7 +538,7 @@ async def address_search(
     """
     if not text.strip():
         raise ToolError("text is empty")
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         try:
             hits = await adressevaelger.search(client, text.strip(), level, max(1, min(limit, 100)))
         except adressevaelger.AdressevaelgerError as e:
@@ -564,7 +564,7 @@ async def address_get(id: str) -> dict[str, Any]:
     """Look up one DAR address by id (a unit address or a husnummer/access address): the full address, postcode,
     municipality and road code, the husnummer id, and the entrance's coordinates (EPSG:25832, metres)."""
     _one_of(id=id)
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         for level in ("adresse", "husnummer"):
             record = await _address_record(client, level, id.strip())
             if record is not None:
@@ -620,7 +620,7 @@ async def buildings(
 
     extra: dict[str, Any] = {}
     units: list[dict[str, Any]] | None = None
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         if name in ("building_id", "jordstykke_id"):
             field = {"building_id": "id_lokalId", "jordstykke_id": "jordstykke"}[name]
             rows, truncated = await _bbr_rows(client, "BBR_Bygning", {field: {"eq": value}}, BUILDING_FIELDS, limit)
@@ -739,7 +739,7 @@ async def buildings_in_area(
         for field, values in (("byg056Varmeinstallation", heating), ("byg057Opvarmningsmiddel", heating_medium))
         if (codes := _codes(field, values))
     }
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         rows, more = await _bbr_rows(
             client, "BBR_Bygning", {"and": filters}, COMPACT_BUILDING_FIELDS, MAX_AREA_BUILDINGS
         )
@@ -825,7 +825,7 @@ async def technical_installations(
         filters.append({"status": {"eq": STANDING}})
     extra: dict[str, Any] = {}
 
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         if area_given:
             area_wkt, km2 = await _area(bbox, polygon_wkt, center, around_address_id, radius_m, crs)
             extra["area"] = {"km2": round(km2, 3), "wkt_epsg25832": area_wkt}
@@ -960,7 +960,7 @@ async def buildings_for_addresses(
     if any(not isinstance(b, int) or b <= 0 for b in bfes):
         raise ToolError("bfe_numbers are positive numbers")
 
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         if addresses:
             gate = asyncio.Semaphore(SEARCH_CONCURRENCY)
             entries = await asyncio.gather(*[_match(client, a, gate) for a in addresses])
@@ -1028,7 +1028,7 @@ def _key(entry: dict[str, Any]) -> tuple[str, Any]:
 
 
 async def _resolve(
-    client: httpx.AsyncClient, entries: list[dict[str, Any]], include_units: bool
+    client: httpx2.AsyncClient, entries: list[dict[str, Any]], include_units: bool
 ) -> dict[tuple[str, Any], tuple[list[dict[str, Any]], str, list[dict[str, Any]], dict[str, Any]]]:
     """Each matched entry's buildings, how they were found, its units and extra fields, keyed by `_key`."""
     keys = [_key(e) for e in entries if e["status"] == "matched"]

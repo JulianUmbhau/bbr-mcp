@@ -2,9 +2,9 @@
 
 import json
 
-import httpx
+import httpx2
+import mock_http as respx
 import pytest
-import respx
 from fake_bbr import FakeBBR
 from mcp import Client
 
@@ -20,7 +20,7 @@ B1, B2, B3 = (f"{i}a3f507a-0000-4000-8000-000000000000" for i in (1, 2, 3))
 
 
 def page(entity, nodes):
-    return httpx.Response(200, json={"data": {entity: {"nodes": nodes, "pageInfo": {"hasNextPage": False}}}})
+    return httpx2.Response(200, json={"data": {entity: {"nodes": nodes, "pageInfo": {"hasNextPage": False}}}})
 
 
 def building(id, house=H1, use="120", heating="5", medium="1", year=1975, status="6", area=150):
@@ -130,7 +130,7 @@ async def test_area_with_not_existing_splits_them(api_key):
 @respx.mock
 async def test_area_around_an_address(api_key):
     respx.get(f"https://adressevaelger.dk/adresser/{A1}").mock(
-        return_value=httpx.Response(
+        return_value=httpx2.Response(
             200,
             json={
                 "status": "ok",
@@ -151,7 +151,7 @@ async def test_area_around_an_address(api_key):
 async def test_area_too_many_buildings(api_key, monkeypatch):
     monkeypatch.setattr("bbr_mcp.server.MAX_AREA_BUILDINGS", 1)
     respx.post(BBR_URL).mock(
-        return_value=httpx.Response(
+        return_value=httpx2.Response(
             200,
             json={
                 "data": {
@@ -182,7 +182,7 @@ async def test_area_input_errors(args, message):
 
 
 def hits(*found):
-    return httpx.Response(200, json={"status": "ok", "fund": list(found)})
+    return httpx2.Response(200, json={"status": "ok", "fund": list(found)})
 
 
 @respx.mock

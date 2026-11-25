@@ -21,3 +21,19 @@ def no_sleep(monkeypatch):
 
     monkeypatch.setattr("bbr_mcp.graphql.asyncio.sleep", sleep)
     return delays
+
+
+@pytest.fixture(autouse=True)
+def mocked_http(request, monkeypatch):
+    """Every client the server makes is answered by mock_http's routes (fresh per test); live tests use the network."""
+    if request.node.get_closest_marker("live"):
+        yield None
+        return
+    import httpx2
+    import mock_http
+
+    from bbr_mcp import http
+
+    mock_http.ROUTER = router = mock_http.Router()
+    monkeypatch.setattr(http, "TRANSPORT", httpx2.MockTransport(router.handle))
+    yield router

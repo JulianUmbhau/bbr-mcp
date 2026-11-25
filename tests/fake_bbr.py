@@ -3,11 +3,11 @@
 import json
 import re
 
-import httpx
+import httpx2
 
 
 def page(entity, nodes):
-    return httpx.Response(200, json={"data": {entity: {"nodes": nodes, "pageInfo": {"hasNextPage": False}}}})
+    return httpx2.Response(200, json={"data": {entity: {"nodes": nodes, "pageInfo": {"hasNextPage": False}}}})
 
 
 def matches(row, where):

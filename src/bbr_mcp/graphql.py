@@ -6,7 +6,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
+import httpx2
 
 BASE_URL = os.environ.get("DATAFORDELER_GRAPHQL_URL", "https://graphql.datafordeler.dk")
 TIMEOUT = 30.0
@@ -17,8 +17,8 @@ PAGE_SIZE = 1000
 # Values per `in` filter (Datafordeler's limit).
 MAX_IN = 100
 
-# Datafordeler takes the key only as the apiKey URL parameter, and httpx logs every request URL at INFO: keep it quiet.
-logging.getLogger("httpx").setLevel(logging.WARNING)
+# Datafordeler takes the key only as the apiKey URL parameter, and httpx2 logs every request URL at INFO: keep it quiet.
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
 class DatafordelerError(Exception):
@@ -39,7 +39,7 @@ def now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
+def _retry_delay(response: httpx2.Response | None, attempt: int) -> float:
     if response is not None:
         try:
             return min(float(response.headers.get("Retry-After", "")), 30.0)
@@ -52,13 +52,13 @@ def _clean(message: str, key: str) -> str:
     return message.replace(key, "***")
 
 
-async def _post(client: httpx.AsyncClient, path: str, body: dict[str, Any]) -> dict[str, Any]:
+async def _post(client: httpx2.AsyncClient, path: str, body: dict[str, Any]) -> dict[str, Any]:
     key = _api_key()
     for attempt in range(MAX_ATTEMPTS):
         response = None
         try:
             response = await client.post(f"{BASE_URL}/{path}", params={"apiKey": key}, json=body, timeout=TIMEOUT)
-        except httpx.TransportError as e:
+        except httpx2.TransportError as e:
             if attempt == MAX_ATTEMPTS - 1:
                 raise DatafordelerError(_clean(f"Datafordeler unreachable: {e!r}", key)) from None
         else:
@@ -87,7 +87,7 @@ async def _post(client: httpx.AsyncClient, path: str, body: dict[str, Any]) -> d
 
 
 async def query(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     register: str,
     entity: str,
     where: dict[str, Any],

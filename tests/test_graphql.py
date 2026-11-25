@@ -1,11 +1,11 @@
 import json
 import logging
 
-import httpx
+import httpx2
+import mock_http as respx
 import pytest
-import respx
 
-from bbr_mcp import graphql
+from bbr_mcp import graphql, http
 
 URL = "https://graphql.datafordeler.dk/BBR/v3"
 pytestmark = pytest.mark.anyio
@@ -13,11 +13,11 @@ pytestmark = pytest.mark.anyio
 
 def page(nodes, next_cursor=None):
     info = {"hasNextPage": next_cursor is not None, "endCursor": next_cursor}
-    return httpx.Response(200, json={"data": {"BBR_Bygning": {"nodes": nodes, "pageInfo": info}}})
+    return httpx2.Response(200, json={"data": {"BBR_Bygning": {"nodes": nodes, "pageInfo": info}}})
 
 
 async def run(limit=100):
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         return await graphql.query(client, "BBR/v3", "BBR_Bygning", {"husnummer": {"eq": "x"}}, "id_lokalId", limit)
 
 
@@ -52,14 +52,14 @@ async def test_query_stops_at_limit(api_key):
 
 @respx.mock
 async def test_retries_429_honouring_retry_after(api_key, no_sleep):
-    respx.post(URL).mock(side_effect=[httpx.Response(429, headers={"Retry-After": "3"}), page([])])
+    respx.post(URL).mock(side_effect=[httpx2.Response(429, headers={"Retry-After": "3"}), page([])])
     assert await run() == ([], False)
     assert no_sleep == [3.0]
 
 
 @respx.mock
 async def test_gives_up_after_repeated_503(api_key, no_sleep):
-    respx.post(URL).mock(return_value=httpx.Response(503))
+    respx.post(URL).mock(return_value=httpx2.Response(503))
     with pytest.raises(graphql.DatafordelerError, match="503"):
         await run()
     assert no_sleep == [1.0, 2.0, 4.0]
@@ -67,14 +67,14 @@ async def test_gives_up_after_repeated_503(api_key, no_sleep):
 
 @respx.mock
 async def test_unauthorized_explains_the_key(api_key):
-    respx.post(URL).mock(return_value=httpx.Response(401, json={"title": "Unauthorized"}))
+    respx.post(URL).mock(return_value=httpx2.Response(401, json={"title": "Unauthorized"}))
     with pytest.raises(graphql.DatafordelerError, match="15 minutes"):
         await run()
 
 
 @respx.mock
 async def test_graphql_errors_are_raised_without_the_key(api_key):
-    respx.post(URL).mock(return_value=httpx.Response(200, json={"errors": [{"message": f"bad {api_key}"}]}))
+    respx.post(URL).mock(return_value=httpx2.Response(200, json={"errors": [{"message": f"bad {api_key}"}]}))
     with pytest.raises(graphql.DatafordelerError) as e:
         await run()
     assert api_key not in str(e.value) and "bad ***" in str(e.value)
