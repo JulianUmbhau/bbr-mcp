@@ -534,13 +534,17 @@ async def address_search(
     level "adresse" finds unit addresses (with floor and door), "husnummer" finds access addresses (one per entrance,
     what buildings are registered on). Each hit has the DAR id to pass to address_get, buildings or units.
     When the text is too vague the hits are roads (type "vejnavn" or "navngivenvejpostnummer"): add a house number.
-    For many addresses at once use buildings_for_addresses.
+    `complete` says whether these are all the hits (fewer than the limit) or there may be more (raise the limit, at
+    most 100, or narrow the text); never search house number by house number to find more.
+    For every building on a street use buildings_for_addresses with street (one call); for many addresses at once use
+    buildings_for_addresses with addresses or husnummer_ids.
     """
     if not text.strip():
         raise ToolError("text is empty")
     async with http.client() as client:
         try:
-            hits = await adressevaelger.search(client, text.strip(), level, max(1, min(limit, 100)))
+            asked = max(1, min(limit, adressevaelger.MAX_HITS))
+            hits = await adressevaelger.search(client, text.strip(), level, asked)
         except adressevaelger.AdressevaelgerError as e:
             raise ToolError(str(e)) from None
     results = [
@@ -556,7 +560,14 @@ async def address_search(
         }
         for h in hits[:limit]
     ]
-    return {"count": len(results), "results": results, "source": DAR_SOURCE}
+    complete = len(hits) < asked
+    out: dict[str, Any] = {"count": len(results), "complete": complete, "results": results}
+    if not complete:
+        out["note"] = (
+            f"{asked} hits, the limit: there may be more. Raise the limit (at most {adressevaelger.MAX_HITS}) or "
+            "narrow the text; for a whole street use buildings_for_addresses with street"
+        )
+    return out | {"source": DAR_SOURCE}
 
 
 @mcp.tool()
@@ -916,13 +927,17 @@ async def buildings_for_addresses(
     husnummer_ids: list[str] | None = None,
     building_ids: list[str] | None = None,
     bfe_numbers: list[int] | None = None,
+    street: str | None = None,
     include_units: bool = False,
     per_address_limit: int = 20,
 ) -> dict[str, Any]:
     """BBR buildings for a list of addresses, buildings or properties at once (e.g. a list of customers or meters),
-    with a summary over all of them.
+    or for every entrance on a street, with a summary over all of them.
 
     Give exactly one of, at most 200 per call:
+    - street: a road and its postcode, e.g. "Søvænget, 4220": every entrance (husnummer) on it, in one call. The
+      summary's `street` says how many entrances the road has and whether all are listed (`complete`); Adressevælger
+      lists at most 100 per road, so for a longer one the rest are missing: say so, or use buildings_in_area.
     - addresses as free text (e.g. "Jagtvej 120, 1. tv, 2200 København N"; include house number and postcode)
     - husnummer_ids (DAR access address ids)
     - building_ids (BBR bygning ids), e.g. from a table that links meters to buildings
@@ -946,9 +961,10 @@ async def buildings_for_addresses(
     husnummer_ids = [h.strip() for h in husnummer_ids or [] if h and h.strip()]
     building_ids = [b.strip() for b in building_ids or [] if b and b.strip()]
     bfes = list(bfe_numbers or [])
-    given = [x for x in (addresses, husnummer_ids, building_ids, bfes) if x]
+    street = (street or "").strip()
+    given = [x for x in (addresses, husnummer_ids, building_ids, bfes, [street] if street else []) if x]
     if len(given) != 1:
-        raise ToolError("Give exactly one of addresses, husnummer_ids, building_ids or bfe_numbers")
+        raise ToolError("Give exactly one of addresses, husnummer_ids, building_ids, bfe_numbers or street")
     if len(given[0]) > MAX_ADDRESSES:
         raise ToolError(f"At most {MAX_ADDRESSES} per call: split the list")
     if per_address_limit < 0:
@@ -960,8 +976,11 @@ async def buildings_for_addresses(
     if any(not isinstance(b, int) or b <= 0 for b in bfes):
         raise ToolError("bfe_numbers are positive numbers")
 
+    street_info: dict[str, Any] | None = None
     async with http.client() as client:
-        if addresses:
+        if street:
+            street_info, entries = await _street(client, street)
+        elif addresses:
             gate = asyncio.Semaphore(SEARCH_CONCURRENCY)
             entries = await asyncio.gather(*[_match(client, a, gate) for a in addresses])
         elif husnummer_ids:
@@ -1011,12 +1030,55 @@ async def buildings_for_addresses(
     summary["not_found"] = statuses["not_found"]
     if statuses["error"]:
         summary["errors"] = statuses["error"]
+    if street_info is not None:
+        summary["street"] = street_info
     return {
         "summary": summary | _summary(unique),
         "results": entries,
         "note": NOT_EXISTING_NOTE,
-        "source": f"{BBR_SOURCE} {DAR_SOURCE}" if addresses else BBR_SOURCE,
+        "source": f"{BBR_SOURCE} {DAR_SOURCE}" if addresses or street else BBR_SOURCE,
     }
+
+
+async def _street(client: httpx2.AsyncClient, text: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The road `text` names (one road in one postcode) and an entry per entrance on it."""
+    try:
+        roads = await adressevaelger.streets(client, text)
+    except adressevaelger.AdressevaelgerError as e:
+        raise ToolError(str(e)) from None
+    postcode = re.search(r"\b\d{4}\b", text)
+    if postcode:
+        roads = [r for r in roads if r.get("postnr") == postcode.group()]
+    words = _normal(re.sub(r"\b\d{4}\b.*", "", text))
+    same = [r for r in roads if _normal(r.get("vejnavn", "")) == words]
+    roads = same or roads
+    if not roads:
+        raise ToolError(f'No road matches {text!r}: give the road name and its postcode, e.g. "Søvænget, 4220"')
+    if len(roads) > 1:
+        names = ", ".join(r.get("titel", "") for r in roads[:10])
+        raise ToolError(f"Several roads match {text!r}: {names}. Give the postcode")
+    road = roads[0]
+    try:
+        houses = await adressevaelger.entrances(client, road["vejnavn"], road["postnr"])
+    except adressevaelger.AdressevaelgerError as e:
+        raise ToolError(str(e)) from None
+    total = road.get("antal_husnumre")
+    info: dict[str, Any] = {
+        "titel": road.get("titel"),
+        "entrances": total if total is not None else len(houses),
+        "listed": len(houses),
+    }
+    info["complete"] = len(houses) >= total if total is not None else len(houses) < adressevaelger.MAX_HITS
+    if not info["complete"]:
+        info["note"] = (
+            f"Adressevælger lists at most {adressevaelger.MAX_HITS} entrances of a road: {len(houses)} of "
+            f"{info['entrances']} are here, the ones with the lowest numbers. Say so, or use buildings_in_area"
+        )
+    entries = [
+        {"input": h.get("titel"), "status": "matched", "match": {"titel": h.get("titel"), "husnummer_id": h["id"]}}
+        for h in houses
+    ]
+    return info, entries
 
 
 def _key(entry: dict[str, Any]) -> tuple[str, Any]:

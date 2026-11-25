@@ -103,6 +103,19 @@ async def test_address_search():
     ]
     params = route.calls[0].request.url.params
     assert params["tekst"] == "Jagtvej 120 1 101 2200" and params["token"] == "adressevaelger123"
+    assert result.structured_content["complete"] is True and "note" not in result.structured_content
+
+
+@respx.mock
+async def test_address_search_says_when_there_may_be_more():
+    hit = {"type": "husnummer", "id": HOUSE_ID, "titel": "Jagtvej 1, 2200 København N"}
+    route = respx.get("https://adressevaelger.dk/husnumre/soeg").mock(
+        return_value=httpx2.Response(200, json={"status": "ok", "fund": [hit, hit]})
+    )
+    out = (await call("address_search", text="Jagtvej 2200", level="husnummer", limit=2)).structured_content
+    assert out["complete"] is False and "street" in out["note"]
+    out = (await call("address_search", text="Jagtvej 2200", level="husnummer", limit=500)).structured_content
+    assert route.calls[1].request.url.params["maksimum"] == "100" and out["complete"] is True
 
 
 @respx.mock

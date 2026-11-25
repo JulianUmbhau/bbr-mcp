@@ -131,3 +131,13 @@ async def test_solar_plants_around_roenne():
     )
     solar = out["summary"]["by_type"][0]
     assert solar["code"] == "1230" and solar["count"] > 50 and solar["power"]["median"] < 50
+
+
+async def test_a_whole_street_in_one_call():
+    short = await call("buildings_for_addresses", street="Søvænget, 4220", per_address_limit=0)
+    assert (
+        short["summary"]["street"]["complete"]
+        and short["summary"]["entries"] == short["summary"]["street"]["entrances"]
+    )
+    long = await call("buildings_for_addresses", street="Jagtvej, 2200", per_address_limit=0)
+    assert not long["summary"]["street"]["complete"] and long["summary"]["street"]["listed"] == 100

@@ -43,6 +43,23 @@ async def search(client: httpx2.AsyncClient, text: str, level: str, limit: int) 
     return (payload or {}).get("fund") or []
 
 
+# Adressevælger's largest page; it has no paging, so a search never returns more.
+MAX_HITS = 100
+
+
+async def streets(client: httpx2.AsyncClient, text: str) -> list[dict[str, Any]]:
+    """Roads within a postcode matching `text` (type navngivenvejpostnummer), each with its number of entrances
+    (antal_husnumre)."""
+    payload = await _get(client, "soeg", {"tekst": text, "maal": "navngivenvejpostnummer"})
+    return [h for h in (payload or {}).get("fund") or [] if h.get("type") == "navngivenvejpostnummer"]
+
+
+async def entrances(client: httpx2.AsyncClient, road: str, postcode: str) -> list[dict[str, Any]]:
+    """The entrances (husnumre) of one road in one postcode, by house number: at most MAX_HITS."""
+    payload = await _get(client, "husnumre/soeg", {"vejnavn": road, "postnummer": postcode, "maksimum": MAX_HITS})
+    return [h for h in (payload or {}).get("fund") or [] if h.get("type") == "husnummer" and h.get("vejnavn") == road]
+
+
 async def get(client: httpx2.AsyncClient, level: str, id: str) -> dict[str, Any] | None:
     payload = await _get(client, f"{LEVELS[level]}/{id}")
     return None if payload is None else payload.get(level)

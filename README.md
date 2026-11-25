@@ -22,12 +22,12 @@ It uses no DAWA (closed in 2026) and no legacy Datafordeler REST or username/pas
 
 | Tool | Input | Returns |
 |---|---|---|
-| `address_search` | `text`, `level` (`adresse` or `husnummer`), `limit` | DAR ids and labels of the matching addresses |
+| `address_search` | `text`, `level` (`adresse` or `husnummer`), `limit` (at most 100) | DAR ids and labels of the matching addresses, and `complete`: whether these are all of them |
 | `address_get` | `id` of a unit address or a husnummer | full address, postcode, municipality and road code, husnummer id, coordinates |
 | `buildings` | one of `address_id`, `husnummer_id`, `building_id`, `jordstykke_id`, `bfe_nummer`; `include_units`, `limit` | BBR buildings (`byg0xx` fields), how they were found (`found_via`) and optionally their units |
 | `units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
 | `buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
-| `buildings_for_addresses` | `addresses` (free text), `husnummer_ids`, `building_ids` or `bfe_numbers`, at most 200; `include_units`, `per_address_limit` (default 20) | each address's match (with `exact` and alternatives) or each building, plus a summary over all of them |
+| `buildings_for_addresses` | `addresses` (free text), `husnummer_ids`, `building_ids` or `bfe_numbers`, at most 200, or a `street` ("Søvænget, 4220"); `include_units`, `per_address_limit` (default 20) | each address's match (with `exact` and alternatives), each building or each entrance on the street, plus a summary over all of them (for a street: its number of entrances and whether all are listed; Adressevælger lists at most 100 per road) |
 
 | `technical_installations` | one of `bfe_nummer`, `husnummer_id`, `building_id`, `jordstykke_id` or an area; `types` (e.g. `1230` Solcelleanlæg); `include_not_existing`, `limit` | BBR technical installations (`tek0xx` fields) with a summary by type, count and registered power |
 

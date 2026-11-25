@@ -316,7 +316,7 @@ async def test_buildings_for_building_ids_with_units(api_key):
 @pytest.mark.parametrize(
     "args, message",
     [
-        ({}, "exactly one of addresses, husnummer_ids, building_ids or bfe_numbers"),
+        ({}, "exactly one of addresses, husnummer_ids, building_ids, bfe_numbers or street"),
         ({"bfe_numbers": [0]}, "positive"),
         ({"addresses": ["a"], "husnummer_ids": [H1]}, "exactly one of"),
         ({"husnummer_ids": [H1], "building_ids": [B1]}, "exactly one of"),
@@ -337,3 +337,95 @@ def test_exact_keeps_house_number_and_floor_apart():
     assert _normal("Nørregade 1, 11. tv., 5000 Odense C") != _normal("Nørregade 11, 1. tv., 5000 Odense C")
     assert _normal("Jagtvej 120, 1. 101, 2200 København N") == _normal("Jagtvej 120 1 101 2200 københavn n")
     assert _normal("Vestergade 12A, 7100") == _normal("Vestergade 12 A, 7100")
+
+
+# ------------------------------------------------------------------ a street
+
+
+ROADS_URL = "https://adressevaelger.dk/soeg"
+HOUSES_URL = "https://adressevaelger.dk/husnumre/soeg"
+
+
+def road(name, postcode, town, count):
+    return {
+        "type": "navngivenvejpostnummer",
+        "id": f"r-{postcode}",
+        "titel": f"{name} {postcode} {town}",
+        "vejnavn": name,
+        "postnr": postcode,
+        "antal_husnumre": count,
+    }
+
+
+def house(id, name, number, postcode="4220", town="Korsør"):
+    titel = f"{name} {number}, {postcode} {town}"
+    return {"type": "husnummer", "id": id, "titel": titel, "vejnavn": name, "husnummer": number}
+
+
+@respx.mock
+async def test_a_street_gives_every_entrance_and_its_buildings_in_one_call(api_key):
+    roads = respx.get(ROADS_URL).mock(
+        return_value=httpx2.Response(
+            200,
+            json={
+                "status": "ok",
+                "fund": [road("Søvænget", "4220", "Korsør", 2), road("Søvænget", "2770", "Kastrup", 30)],
+            },
+        )
+    )
+    houses = respx.get(HOUSES_URL).mock(
+        return_value=httpx2.Response(
+            200,
+            json={
+                "status": "ok",
+                "fund": [house(H1, "Søvænget", "2A"), house(H2, "Søvænget", "2B"), house("x", "Søvængerne", "1")],
+            },
+        )
+    )
+    bbr = FakeBBR(BBR_Bygning=[building(B1, house=H1), building(B2, house=H2, use="910")])
+    respx.post(BBR_URL).mock(side_effect=bbr)
+    out = (await call("buildings_for_addresses", street="Søvænget, 4220 Korsør")).structured_content
+    assert roads.calls[0].request.url.params["maal"] == "navngivenvejpostnummer"
+    params = houses.calls[0].request.url.params
+    assert (params["vejnavn"], params["postnummer"], params["maksimum"]) == ("Søvænget", "4220", "100")
+    assert out["summary"]["street"] == {"titel": "Søvænget 4220 Korsør", "entrances": 2, "listed": 2, "complete": True}
+    assert [e["input"] for e in out["results"]] == ["Søvænget 2A, 4220 Korsør", "Søvænget 2B, 4220 Korsør"]
+    assert out["summary"]["entries"] == 2 and out["summary"]["buildings"] == 2
+    assert "DAR" in out["source"]
+
+
+@respx.mock
+async def test_a_long_street_says_what_is_missing(api_key):
+    respx.get(ROADS_URL).mock(
+        return_value=httpx2.Response(200, json={"status": "ok", "fund": [road("Jagtvej", "2200", "København N", 187)]})
+    )
+    respx.get(HOUSES_URL).mock(
+        return_value=httpx2.Response(
+            200, json={"status": "ok", "fund": [house(H1, "Jagtvej", "1", "2200", "København N")]}
+        )
+    )
+    respx.post(BBR_URL).mock(side_effect=FakeBBR(BBR_Bygning=[building(B1)]))
+    out = await call("buildings_for_addresses", street="Jagtvej 2200", per_address_limit=0)
+    street = out.structured_content["summary"]["street"]
+    assert street["complete"] is False and street["entrances"] == 187 and street["listed"] == 1
+    assert "at most 100" in street["note"] and "buildings_in_area" in street["note"]
+
+
+@respx.mock
+async def test_a_street_without_postcode_or_unknown_is_refused(api_key):
+    respx.get(ROADS_URL).mock(
+        side_effect=[
+            httpx2.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "fund": [road("Søvænget", "4220", "Korsør", 9), road("Søvænget", "2770", "Kastrup", 30)],
+                },
+            ),
+            httpx2.Response(200, json={"status": "ok", "fund": []}),
+        ]
+    )
+    assert "Several roads match" in error_text(await call("buildings_for_addresses", street="Søvænget"))
+    assert "No road matches" in error_text(await call("buildings_for_addresses", street="Nonexistentvej, 4220"))
+    both = await call("buildings_for_addresses", street="Søvænget, 4220", husnummer_ids=[H1])
+    assert "exactly one of" in error_text(both)
