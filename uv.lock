@@ -41,7 +41,7 @@ wheels = [
 
 [[package]]
 name = "bbr-mcp"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

@@ -32,6 +32,9 @@ FIELD_LISTS = {
     "enh051Varmeinstallation": "EnhVarmeinstallation",
     "enh052Opvarmningsmiddel": "Opvarmningsmiddel",
     "enh053SupplerendeVarme": "EnhSupplerendeVarme",
+    # TekniskAnlaeg
+    "tek020Klassifikation": "Klassifikation",
+    "tek110Driftstatus": "Driftstatus",
 }
 
 CODES_FILE = Path(__file__).with_name("codes.json")

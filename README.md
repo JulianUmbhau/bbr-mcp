@@ -6,6 +6,8 @@ An [MCP](https://modelcontextprotocol.io) server for Danish buildings and addres
 - look up the address's details and coordinates,
 - read the BBR buildings and units registered there: use, year built, areas, materials, heating installation and
   medium, housing type, rooms, and more. Code values come with their official Danish text.
+- find the buildings of a property (BFE number), and its technical installations: solar PV, wind turbines, solar
+  heating, burners, tanks and more.
 
 It calls the official services live on each request:
 
@@ -22,10 +24,24 @@ It uses no DAWA (closed in 2026) and no legacy Datafordeler REST or username/pas
 |---|---|---|
 | `address_search` | `text`, `level` (`adresse` or `husnummer`), `limit` | DAR ids and labels of the matching addresses |
 | `address_get` | `id` of a unit address or a husnummer | full address, postcode, municipality and road code, husnummer id, coordinates |
-| `buildings` | one of `husnummer_id`, `address_id`, `building_id`, `jordstykke_id`; `limit` | BBR buildings (`byg0xx` fields) |
+| `buildings` | one of `address_id`, `husnummer_id`, `building_id`, `jordstykke_id`, `bfe_nummer`; `include_units`, `limit` | BBR buildings (`byg0xx` fields), how they were found (`found_via`) and optionally their units |
 | `units` | one of `address_id`, `building_id`, `unit_id`; `limit` | BBR units (`enh0xx` fields) |
 | `buildings_in_area` | an area (`bbox`, `polygon_wkt`, `center` + `radius_m`, or `around_address_id` + `radius_m`), `crs` (`25832` or `4326`); filters `uses`, `heating`, `heating_medium`; `include_not_existing`; `limit` | a summary of the buildings (by use, heating installation, heating medium, supplementary heat and year built, total areas) and a compact list |
-| `buildings_for_addresses` | `addresses` (free text), `husnummer_ids` or `building_ids`, at most 200; `include_units`, `per_address_limit` (default 20) | each address's match (with `exact` and alternatives) or each building, plus a summary over all of them |
+| `buildings_for_addresses` | `addresses` (free text), `husnummer_ids`, `building_ids` or `bfe_numbers`, at most 200; `include_units`, `per_address_limit` (default 20) | each address's match (with `exact` and alternatives) or each building, plus a summary over all of them |
+
+| `technical_installations` | one of `bfe_nummer`, `husnummer_id`, `building_id`, `jordstykke_id` or an area; `types` (e.g. `1230` Solcelleanlæg); `include_not_existing`, `limit` | BBR technical installations (`tek0xx` fields) with a summary by type, count and registered power |
+
+How a building is found, following BBR's own links:
+
+- **Unit address** (a flat, a house): the building of its BBR unit. This is exact, also in a block with several
+  entrances.
+- **Husnummer**: the buildings registered on it. A building names only one representative husnummer; its other
+  entrances link through its stairwells (BBR Opgang), so a husnummer without a building of its own gives the building
+  it is an entrance to.
+- **BFE number** (a property): the buildings on its land (Grund), a building on someone else's land, or, for an owner
+  flat (ejerlejlighed), its units and their building. Rented and cooperative flats have no BFE of their own.
+
+`found_via` says which route was used.
 
 Area and list notes:
 
@@ -34,6 +50,8 @@ Area and list notes:
   only its own coordinate system.
 - **Filters.** BBR can filter on use and status itself. It has no heating filter, so `heating` and `heating_medium`
   apply to the fetched buildings. A building whose heating is registered on its units (code 99) matches only a filter on 99.
+- **Registered power.** `tek039Effekt` is meant in kW but not always registered so: some rooftop solar plants have
+  values like 71100. The summary gives the median and the largest next to the total, so check before summing.
 - **Address matching.** Free-text addresses go through Adressevælger, and `exact` says whether the match is the
   same address written differently. Check non-exact matches before relying on them.
 

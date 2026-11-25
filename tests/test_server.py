@@ -3,6 +3,7 @@ import json
 import httpx
 import pytest
 import respx
+from fake_bbr import FakeBBR
 from mcp import Client
 
 from bbr_mcp.server import mcp
@@ -69,6 +70,7 @@ async def test_tools_are_registered():
         "units",
         "buildings_in_area",
         "buildings_for_addresses",
+        "technical_installations",
     }
 
 
@@ -123,9 +125,13 @@ async def test_bbr_buildings_by_address_resolves_husnummer_and_translates(api_ke
     respx.get(f"https://adressevaelger.dk/adresser/{ADDRESS_ID}").mock(
         return_value=httpx.Response(200, json={"status": "ok", "adresse": ADDRESS})
     )
-    bbr = respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Bygning", [BUILDING]))
+    unit = {"id_lokalId": "u1", "status": "6", "adresseIdentificerer": ADDRESS_ID, "bygning": BUILDING["id_lokalId"]}
+    fake = FakeBBR(BBR_Enhed=[unit], BBR_Bygning=[BUILDING])
+    respx.post(BBR_URL).mock(side_effect=fake)
     out = (await call("buildings", address_id=ADDRESS_ID)).structured_content
-    assert json.loads(bbr.calls[0].request.content)["variables"]["where"] == {"husnummer": {"eq": HOUSE_ID}}
+    assert fake.asked("BBR_Enhed") == [{"adresseIdentificerer": {"in": [ADDRESS_ID]}}]
+    assert fake.asked("BBR_Bygning") == [{"id_lokalId": {"in": [BUILDING["id_lokalId"]]}}]
+    assert out["found_via"] == "unit" and out["husnummer_id"] == HOUSE_ID
     building = out["results"][0]
     assert building["byg056Varmeinstallation"] == {"code": "1", "text": "Fjernvarme/blokvarme"}
     assert building["byg026Opfoerelsesaar"] == 1971
@@ -156,7 +162,8 @@ async def test_buildings_not_standing_are_listed_apart(api_key):
         {"id_lokalId": "partly", "status": "13"},
         {"id_lokalId": "odd", "status": "99"},
     ]
-    respx.post(BBR_URL).mock(return_value=bbr_page("BBR_Bygning", rows))
+    rows = [{"husnummer": HOUSE_ID, **r} for r in rows]
+    respx.post(BBR_URL).mock(side_effect=FakeBBR(BBR_Bygning=rows))
     out = (await call("buildings", husnummer_id=HOUSE_ID)).structured_content
     assert out["count"] == 1 and [b["id_lokalId"] for b in out["results"]] == [BUILDING["id_lokalId"]]
     assert out["not_existing_count"] == 4

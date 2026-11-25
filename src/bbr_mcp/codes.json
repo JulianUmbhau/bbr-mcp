@@ -1,6 +1,6 @@
 {
  "_source": "https://teknik.bbr.dk/kodelister",
- "_fetched": "2026-11-20",
+ "_fetched": "2026-11-24",
  "AsbestholdigtMateriale": {
   "1": "Asbestholdigt ydervægsmateriale",
   "2": "Asbestholdigt tagdækningsmateriale",
@@ -219,6 +219,10 @@
   "9": "Ingen varmeinstallation",
   "99": "Varmeinstallation er registreret på enheder"
  },
+ "Driftstatus": {
+  "1": "I drift",
+  "2": "Ikke i drift"
+ },
  "Energiforsyning": {
   "1": "Gas fra værk",
   "2": "230 V el fra værk",
@@ -364,6 +368,48 @@
   "7": "Som 6, men med tinglyst bevaringsdeklaration",
   "8": "Bygningen bevaringsværdig",
   "9": "Bygningen medtaget i registrant, bevaringsplan mm."
+ },
+ "Klassifikation": {
+  "1110": "Tank",
+  "1120": "Silo",
+  "1130": "Gasbeholder",
+  "1140": "Affaldsbeholder",
+  "1150": "Udskiller",
+  "1210": "Vindmølle",
+  "1220": "Slanger til jordvarme",
+  "1230": "Solcelleanlæg",
+  "1235": "Solvarmeanlæg",
+  "1240": "Nødstrømsforsyningsanlæg",
+  "1250": "Transformerstation",
+  "1255": "Oliefyr",
+  "1260": "Elskab",
+  "1265": "Naturgasfyr",
+  "1270": "(UDFASES) Andet energiproducerende eller - distribuerende anlæg",
+  "1275": "Halmfyr",
+  "1280": "Biogasanlæg",
+  "1285": "Pillefyr",
+  "1290": "Brændeovn",
+  "1295": "Andet energianlæg",
+  "1310": "Vandtårn",
+  "1320": "Pumpestation",
+  "1330": "Swimmingpool",
+  "1340": "Privat rensningsanlæg",
+  "1350": "Offentligt rensningsanlæg",
+  "1360": "Regnvandsanlæg",
+  "1905": "Legeplads",
+  "1910": "Teknikhus",
+  "1915": "Døgnautomat",
+  "1920": "Køleanlæg",
+  "1925": "Kunstværk",
+  "1930": "Sirene og mast med sirene",
+  "1935": "Skilt",
+  "1940": "Antenne og mast med antenne",
+  "1945": "Dambrug",
+  "1950": "Møddingsanlæg",
+  "1955": "Andet teknisk anlæg",
+  "1960": "(UDFASES) Ensilageanlæg",
+  "1965": "Planlager",
+  "1970": "Fortidsminde, historisk ruin"
  },
  "Koekkenforhold": {
   "E": "Eget køkken med afløb",

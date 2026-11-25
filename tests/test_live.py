@@ -36,11 +36,11 @@ async def test_search_then_get():
     assert address["husnummer_id"] == HOUSE_ID and address["postnr"] == "2200"
 
 
-async def test_buildings_by_address_and_by_husnummer_agree():
+async def test_a_flat_gives_its_own_building_among_those_at_its_entrance():
     by_house = await call("buildings", husnummer_id=HOUSE_ID)
     by_address = await call("buildings", address_id=ADDRESS_ID)
-    assert by_house["count"] >= 1
-    assert ids(by_house) == ids(by_address)
+    assert by_house["count"] >= 1 and by_address["found_via"] == "unit" and by_address["count"] == 1
+    assert ids(by_address) <= ids(by_house)
     assert all(b["status"]["code"] == "6" for b in by_house["results"])
     uses = [b["byg021BygningensAnvendelse"] for b in by_house["results"]]
     assert all(u["text"] != "unknown code" for u in uses)
@@ -98,6 +98,36 @@ async def test_buildings_for_building_ids_match_the_husnummer():
     by_house = await call("buildings", husnummer_id=HOUSE_ID)
     building_ids = sorted(ids(by_house))
     out = await call("buildings_for_addresses", building_ids=building_ids, include_units=True)
-    assert out["summary"]["found"] == len(building_ids) and out["summary"]["not_found"] == 0
+    assert out["summary"]["matched"] == len(building_ids) and out["summary"]["not_found"] == 0
     assert out["summary"]["buildings"] == by_house["count"]
     assert any(e.get("units") for e in out["results"])
+
+
+# Kommandanthøjen 3, 3700 Rønne: an entrance to a block whose representative husnummer is another one.
+KOMMANDANTHOEJEN_3 = "0a3f5087-79a7-32b8-e044-0003ba298018"
+KOMMANDANTHOEJEN_3_1_4 = "0a3f50b1-fc3b-32b8-e044-0003ba298018"
+
+
+async def test_an_entrance_and_a_flat_find_their_building():
+    by_entrance = await call("buildings", husnummer_id=KOMMANDANTHOEJEN_3)
+    assert by_entrance["found_via"] == "entrance (opgang)" and by_entrance["count"] == 1
+    by_flat = await call("buildings", address_id=KOMMANDANTHOEJEN_3_1_4, include_units=True)
+    assert by_flat["found_via"] == "unit" and len(by_flat["units"]) == 1
+    assert by_flat["results"][0]["id_lokalId"] == by_entrance["results"][0]["id_lokalId"]
+
+
+async def test_the_three_kinds_of_property():
+    land = await call("buildings", bfe_nummer=5409706, limit=1000)
+    assert "samlet fast ejendom" in land["property"]["kind"] and land["count"] >= 2
+    flat = await call("buildings", bfe_nummer=415881, include_units=True)
+    assert "ejerlejlighed" in flat["property"]["kind"] and flat["units"]
+    hut = await call("buildings", bfe_nummer=704266)
+    assert "fremmed grund" in hut["property"]["kind"]
+
+
+async def test_solar_plants_around_roenne():
+    out = await call(
+        "technical_installations", center=[14.70, 55.10], crs="4326", radius_m=2500, types=["1230"], limit=0
+    )
+    solar = out["summary"]["by_type"][0]
+    assert solar["code"] == "1230" and solar["count"] > 50 and solar["power"]["median"] < 50

@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 import respx
+from fake_bbr import FakeBBR
 from mcp import Client
 
 from bbr_mcp.server import mcp
@@ -202,44 +203,49 @@ async def test_addresses_are_matched_and_looked_up_together(api_key):
         return hits()
 
     respx.get(SEARCH_URL).mock(side_effect=search)
-    bbr = respx.post(BBR_URL).mock(
-        side_effect=lambda request: page(
-            "BBR_Bygning",
-            [
-                building("b1"),
-                building("b1-shed", use="930", heating=None),
-                building("b2", house=H2, heating="1"),
-                building("gone", house=H2, status="10"),
-            ],
-        )
+    fake = FakeBBR(
+        BBR_Enhed=[{"id_lokalId": "u1", "status": "6", "adresseIdentificerer": A1, "bygning": "b1"}],
+        BBR_Bygning=[
+            building("b1"),
+            building("b1-shed", use="930", heating=None),
+            building("b2", house=H2, heating="1"),
+            building("gone", house=H2, status="10"),
+        ],
     )
+    respx.post(BBR_URL).mock(side_effect=fake)
     out = (
         await call(
             "buildings_for_addresses",
             addresses=["Jagtvej 120, 1. 101, 2200 København N", "Nørrebrogade 1 2200", "Vej", "Fake Street 9"],
         )
     ).structured_content
-    assert sorted(sent(bbr)["where"]["husnummer"]["in"]) == sorted([H1, H2])
+    assert fake.asked("BBR_Enhed") == [{"adresseIdentificerer": {"in": [A1]}}]
+    assert fake.asked("BBR_Bygning")[-1] == {"husnummer": {"in": [H2]}}
     s = out["summary"]
-    assert (s["addresses"], s["matched"], s["matched_exactly"], s["not_found"], s["vague"]) == (4, 2, 1, 1, 1)
-    assert s["buildings"] == 3
-    jagtvej, norrebro, vague, fake = out["results"]
+    assert (s["entries"], s["matched"], s["matched_exactly"], s["not_found"], s["vague"]) == (4, 2, 1, 1, 1)
+    assert s["buildings"] == 2
+    jagtvej, norrebro, vague, fake_street = out["results"]
     assert jagtvej["match"]["exact"] is True and jagtvej["match"]["adresse_id"] == A1
-    assert [b["id_lokalId"] for b in jagtvej["buildings"]] == ["b1", "b1-shed"]
+    # The flat's own building, through its unit: not the shed at the same entrance.
+    assert jagtvej["found_via"] == "unit" and [b["id_lokalId"] for b in jagtvej["buildings"]] == ["b1"]
     assert norrebro["match"]["exact"] is False and norrebro["match"]["alternatives"] == [
         "Nørrebrogade 11, 2200 København N"
     ]
+    assert norrebro["found_via"] == "husnummer"
     assert norrebro["building_count"] == 1 and norrebro["not_existing_count"] == 1 and "not_existing" not in norrebro
     assert vague["status"] == "vague" and "house number" in vague["hint"]
-    assert fake["status"] == "not_found"
+    assert fake_street["status"] == "not_found"
 
 
 @respx.mock
 async def test_husnummer_ids_skip_the_search_and_batch_by_100(api_key):
     ids = [f"00000000-0000-0000-0000-{i:012d}" for i in range(150)]
-    bbr = respx.post(BBR_URL).mock(return_value=page("BBR_Bygning", []))
+    fake = FakeBBR()
+    respx.post(BBR_URL).mock(side_effect=fake)
     out = (await call("buildings_for_addresses", husnummer_ids=ids)).structured_content
-    assert sorted(len(sent(bbr, i)["where"]["husnummer"]["in"]) for i in range(2)) == [50, 100]
+    assert sorted(len(w["husnummer"]["in"]) for w in fake.asked("BBR_Bygning")) == [50, 100]
+    # None has a building of its own, so each is looked up as an entrance, in batches too.
+    assert sorted(len(w["adgangFraHusnummer"]["in"]) for w in fake.asked("BBR_Opgang")) == [50, 100]
     assert out["summary"]["matched"] == 150 and out["summary"]["buildings"] == 0
 
 
@@ -251,23 +257,17 @@ async def test_units_for_addresses_with_floor_and_door(api_key):
         )
     )
 
-    def bbr(request):
-        if "BBR_Enhed(" in json.loads(request.content)["query"]:
-            return page(
-                "BBR_Enhed",
-                [
-                    {
-                        "id_lokalId": "u1",
-                        "status": "6",
-                        "adresseIdentificerer": A1,
-                        "enh020EnhedensAnvendelse": "150",
-                        "enh051Varmeinstallation": "1",
-                    }
-                ],
-            )
-        return page("BBR_Bygning", [building("b1", use="150", heating="99")])
-
-    respx.post(BBR_URL).mock(side_effect=bbr)
+    unit = {
+        "id_lokalId": "u1",
+        "status": "6",
+        "adresseIdentificerer": A1,
+        "bygning": "b1",
+        "enh020EnhedensAnvendelse": "150",
+        "enh051Varmeinstallation": "1",
+    }
+    respx.post(BBR_URL).mock(
+        side_effect=FakeBBR(BBR_Enhed=[unit], BBR_Bygning=[building("b1", use="150", heating="99")])
+    )
     out = (
         await call("buildings_for_addresses", addresses=["Jagtvej 120, 1. 101, 2200"], include_units=True)
     ).structured_content
@@ -292,24 +292,22 @@ async def test_a_large_site_lists_at_most_per_address_limit(api_key):
 
 @respx.mock
 async def test_buildings_for_building_ids_with_units(api_key):
-    def bbr(request):
-        body = json.loads(request.content)
-        if "BBR_Enhed(" in body["query"]:
-            assert body["variables"]["where"]["bygning"]["in"] == [B1, B2, B3]
-            return page(
-                "BBR_Enhed", [{"id_lokalId": "u1", "status": "6", "bygning": B1, "enh020EnhedensAnvendelse": "120"}]
-            )
-        assert body["variables"]["where"]["id_lokalId"]["in"] == [B1, B2, B3]
-        return page("BBR_Bygning", [building(B1), building(B2, status="10")])
-
-    respx.post(BBR_URL).mock(side_effect=bbr)
+    fake = FakeBBR(
+        BBR_Enhed=[{"id_lokalId": "u1", "status": "6", "bygning": B1, "enh020EnhedensAnvendelse": "120"}],
+        BBR_Bygning=[building(B1), building(B2, status="10")],
+    )
+    respx.post(BBR_URL).mock(side_effect=fake)
     out = (await call("buildings_for_addresses", building_ids=[B1, B2, B3, B1], include_units=True)).structured_content
+    assert fake.asked("BBR_Bygning") == [{"id_lokalId": {"in": [B1, B2, B3]}}]
+    assert fake.asked("BBR_Enhed") == [{"bygning": {"in": [B1, B2]}}]
     s = out["summary"]
-    assert (s["buildings_asked"], s["found"], s["not_found"], s["buildings"]) == (4, 3, 1, 1)
+    assert (s["entries"], s["matched"], s["not_found"], s["buildings"]) == (4, 3, 1, 1)
     first, demolished, missing, again = out["results"]
     assert first["building_count"] == 1 and first["units"][0]["id_lokalId"] == "u1"
     assert (
-        demolished["building_count"] == 0 and demolished["not_existing"][0]["state"] == "demolished or otherwise ceased"
+        demolished["building_count"] == 0
+        and demolished["state"] == "demolished or otherwise ceased"
+        and demolished["not_existing_count"] == 1
     )
     assert missing == {"input": B3, "status": "not_found"}
     assert again["match"]["building_id"] == B1
@@ -318,7 +316,8 @@ async def test_buildings_for_building_ids_with_units(api_key):
 @pytest.mark.parametrize(
     "args, message",
     [
-        ({}, "exactly one of addresses, husnummer_ids or building_ids"),
+        ({}, "exactly one of addresses, husnummer_ids, building_ids or bfe_numbers"),
+        ({"bfe_numbers": [0]}, "positive"),
         ({"addresses": ["a"], "husnummer_ids": [H1]}, "exactly one of"),
         ({"husnummer_ids": [H1], "building_ids": [B1]}, "exactly one of"),
         ({"building_ids": [B1] * 201}, "At most 200"),
